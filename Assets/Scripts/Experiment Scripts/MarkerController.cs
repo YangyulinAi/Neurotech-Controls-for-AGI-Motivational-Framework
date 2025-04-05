@@ -16,51 +16,52 @@ public class MarkerController
 
     private Dictionary<string, byte> markerValues = new Dictionary<string, byte>
     {
-        // Arrow Direction 
-        {"Rest",50 },
-        {"Up", 80},
-        {"Down", 20},
-        {"Left Close", 40},
-        {"Right Close", 60},
-        {"Up Left Close", 70},
-        {"Up Right Close", 90},
-        {"Left Far", 41},
-        {"Right Far", 61},
-        {"Up Left Far", 71},
-        {"Up Right Far", 91},
+        // Experiment Start/End
+        {"Exp Start",100},
+        {"Exp End", 109},
 
-        // Number Shown
-        {"One", 11},
-        {"Two", 22},
-        {"Three", 33},
-        {"Four", 44},
-        {"Five", 55},
-        {"Six", 66},
-        {"Seven", 77},
-        {"Eight", 88},
-        {"Nine", 99},
+        // Rest Stage
+        {"Open Start", 110},
+        {"Open End", 119},
+        {"Close Start", 120},
+        {"Close End", 129},
+
+        // Video Stage
+        {"Video Start", 200},
+        {"Video End", 209},
+
+        // Video Type
+        {"Neutral", 201},
+        {"Amusement", 202},
+        {"Sadness", 203},
+        {"Anger", 204},
+        {"Fear", 205},
+        {"Disgust", 206},
+
+        // Valence Rating Stage
+        {"Valence Rating Start", 210},
+        {"Valence Rating End", 219},
+
+        // User Res - Valence
+        {"Valence 1", 211},
+        {"Valence 2", 212},
+        {"Valence 3", 213},
+        {"Valence 4", 214},
+        {"Valence 5", 215},
+
+        // Arousal Rating Stage
+        {"Arousal Rating Start", 220},
+        {"Arousal Rating End", 229},
+
+        // User Res - Arousal
+        {"Arousal 1", 221},
+        {"Arousal 2", 222},
+        {"Arousal 3", 223},
+        {"Arousal 4", 224},
+        {"Arousal 5", 225},
 
         // User Res
-        {"0", 0},//Not press
-        {"1", 1},// Pressed
-
-        {"UserRes", 254},
-        { "UserNotRes", 255},
-
-        // Epoch
-        {"Start", 101},
-        {"End", 102},
-
-        // User Res Checker
-        {"True", 201},
-        {"False", 202},
-
-        // Number Show/Hide
-        {"NumberShow", 111},
-        {"NumberHide", 112},
-
-        // Bad Epoch
-        {"Bad", 222}
+        {"Press", 1}
 
     };
 

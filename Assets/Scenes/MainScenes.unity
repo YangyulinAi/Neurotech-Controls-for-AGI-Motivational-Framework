@@ -657,10 +657,8 @@ MonoBehaviour:
   hintDisplayTime: 3
   videoPlayer: {fileID: 484823677}
   rawImage: {fileID: 1724280276}
-  videoFileNames:
-  - video1.mp4
-  - video2.mp4
-  - video3.mp4
+  IP: 192.168.1.11
+  port: 9999
 --- !u!4 &383658830
 Transform:
   m_ObjectHideFlags: 0
