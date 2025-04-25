@@ -94,7 +94,7 @@ public class EventController : MonoBehaviour
                 SendMarker("Valence Rating Start");
                 hasRating = true;
             }
-            else
+            else if (stage == 3 && !hasRating)
             {
                 SendMarker("Arousal Rating Start");
                 hasRating = true;
