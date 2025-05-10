@@ -1,0 +1,12 @@
+
+# online/requirements.txt
+pylsl
+numpy
+scipy
+mne
+onnxruntime
+websockets
+fastapi
+uvicorn
+paho-mqtt
+pyyaml

@@ -3,47 +3,44 @@ using UnityEngine;
 namespace Asset
 {
     /// <summary>
-    /// Listens for key presses (1, 2, 3) to simulate emotion classification
-    /// by assigning preset valence/arousal values and triggering
-    /// corresponding CharacterController actions.
-    /// 1 → Happy (high valence, high arousal)
-    /// 2 → Angry (low valence, high arousal)
-    /// 3 → Sad   (low valence, low arousal)
+    /// Listens to real-time BCI predictions via WebSocket,
+    /// reads valence/arousal from the BciWebSocketClient,
+    /// and triggers CharacterController actions accordingly.
     /// </summary>
     public class EmotionController : MonoBehaviour
     {
-        private float valence;
-        private float arousal;
+        [Tooltip("Reference to the WebSocket client that provides real-time BCI data")]
+        public BciClientWebSocket bciClient;
+
+        private float prevValence = float.NaN;
+        private float prevArousal = float.NaN;
         private CharacterController characterController;
 
         void Awake()
         {
-            // Cache CharacterController instance from scene
+            // Cache CharacterController instance
             characterController = FindObjectOfType<CharacterController>();
+
+            // If not assigned in Inspector, auto-find the BCI client
+            if (bciClient == null)
+            {
+                bciClient = FindObjectOfType<BciClientWebSocket>();
+            }
         }
 
         void Update()
         {
-            // Press 1: Happy
-            if (Input.GetKeyDown(KeyCode.Alpha1))
+            if (bciClient == null) return;
+
+            float v = bciClient.Valence;
+            float a = bciClient.Arousal;
+
+            // Only trigger when values actually change
+            if (!Mathf.Approximately(v, prevValence) || !Mathf.Approximately(a, prevArousal))
             {
-                valence = 0.8f;
-                arousal = 0.8f;
-                DecideAction(valence, arousal);
-            }
-            // Press 2: Angry
-            else if (Input.GetKeyDown(KeyCode.Alpha2))
-            {
-                valence = 0.2f;
-                arousal = 0.8f;
-                DecideAction(valence, arousal);
-            }
-            // Press 3: Sad
-            else if (Input.GetKeyDown(KeyCode.Alpha3))
-            {
-                valence = 0.2f;
-                arousal = 0.2f;
-                DecideAction(valence, arousal);
+                DecideAction(v, a);
+                prevValence = v;
+                prevArousal = a;
             }
         }
 
@@ -53,22 +50,24 @@ namespace Asset
         /// </summary>
         private void DecideAction(float v, float a)
         {
+            const float duration = 2f;
+
             if (v > 0.5f && a > 0.5f)
             {
-                characterController.Happy(2f);
+                characterController.Happy(duration);
             }
             else if (v <= 0.5f && a > 0.5f)
             {
-                characterController.Angry(2f);
+                characterController.Angry(duration);
             }
             else if (v <= 0.5f && a <= 0.5f)
             {
-                characterController.Sad(2f);
+                characterController.Sad(duration);
             }
             else
             {
-                // Fallback to Happy for high valence, low arousal
-                characterController.Happy(2f);
+                // Fallback for high valence, low arousal
+                characterController.Happy(duration);
             }
         }
     }

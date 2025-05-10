@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>BCI Emotional State (VA) Real-Time Monitor</title>
+  <style>
+    body { font-family: sans-serif; padding: 2rem; }
+    h1 { margin-bottom: 1rem; }
+    .metric { font-size: 1.5rem; margin: 0.5rem 0; }
+    .label { font-weight: bold; }
+    #debug {
+      white-space: pre-wrap;
+      background: #f0f0f0;
+      border: 1px solid #ccc;
+      padding: 1rem;
+      margin-top: 2rem;
+      max-height: 200px;
+      overflow-y: auto;
+      font-size: 0.9rem;
+      color: #333;
+    }
+    #chart-container {
+      width: 400px;
+      margin-top: 2rem;
+    }
+  </style>
+  <!-- Chart.js from CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <h1>BCI Emotional State (Valence / Arousal) Real-Time Monitor</h1>
+
+  <div class="metric">
+    <span class="label">Valence:</span>
+    <span id="valence">--</span>
+  </div>
+  <div class="metric">
+    <span class="label">Arousal:</span>
+    <span id="arousal">--</span>
+  </div>
+
+  <div id="chart-container">
+    <canvas id="vaChart"></canvas>
+  </div>
+
+  <h2>Debug Logs</h2>
+  <div id="debug">Initializing debug logs...\n</div>
+
+  <script>
+    // Append messages to debug area
+    function logDebug(msg) {
+      const dbg = document.getElementById("debug");
+      dbg.textContent += msg + "\n";
+      dbg.scrollTop = dbg.scrollHeight;
+    }
+
+    // Initialize Chart.js bar chart
+    const ctx = document.getElementById('vaChart').getContext('2d');
+    const vaChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['Valence', 'Arousal'],
+        datasets: [{
+          label: 'VA Scores',
+          data: [0, 0],
+          backgroundColor: ['rgba(54, 162, 235, 0.6)', 'rgba(255, 99, 132, 0.6)'],
+          borderColor: ['rgba(54, 162, 235, 1)', 'rgba(255, 99, 132, 1)'],
+          borderWidth: 1
+        }]
+      },
+      options: {
+        animation: { duration: 0 },
+        scales: {
+          y: {
+            beginAtZero: true,
+            suggestedMin: -1,
+            suggestedMax: 1
+          }
+        }
+      }
+    });
+
+    // 1) Create WebSocket connection
+    const wsUrl = "ws://localhost:8765";
+    logDebug(`Attempting to connect to ${wsUrl} ...`);
+    const ws = new WebSocket(wsUrl);
+
+    // 2) On open
+    ws.onopen = () => {
+      logDebug("✅ WebSocket connection opened");
+    };
+
+    // 3) On message
+    ws.onmessage = event => {
+      logDebug("ℹ️ Received raw message: " + event.data);
+      try {
+        const data = JSON.parse(event.data);
+        logDebug(`Parsed JSON → valence=${data.valence}, arousal=${data.arousal}`);
+
+        // Update text metrics
+        document.getElementById("valence").textContent = data.valence.toFixed(3);
+        document.getElementById("arousal").textContent = data.arousal.toFixed(3);
+
+        // Update bar chart
+        vaChart.data.datasets[0].data = [data.valence, data.arousal];
+        vaChart.update();
+      } catch (e) {
+        logDebug("❌ JSON parse error: " + e);
+      }
+    };
+
+    // 4) On error
+    ws.onerror = err => {
+      logDebug("⚠️ WebSocket error: " + (err.message || err));
+    };
+
+    // 5) On close
+    ws.onclose = ev => {
+      logDebug(`🔌 WebSocket closed (code=${ev.code}, reason=${ev.reason || "none"})`);
+    };
+  </script>
+</body>
+</html>
