@@ -33,6 +33,9 @@ Data Collection → Offline Training → Online Inference → API Layer → Appl
 | **Application Layer** | `Unity/`, `web/index.html`         | Unity/Web apps consuming real-time predictions  |
 
 ---
+![ChatGPT Image May 10, 2025, 08_29_34 PM](https://github.com/user-attachments/assets/47e69ea3-53d9-4805-b86d-94a89d01819d)
+
+
 
 ## Data Processing and Preprocessing
 
@@ -101,6 +104,7 @@ The online layer serves as the real-time inference engine, which continuously pr
    - MQTT: Publishes predictions to the specified topic.
 
 ---
+![image](https://github.com/user-attachments/assets/2d0fd211-f2b7-40dd-ab85-893b5cab81d1)
 
 ## Installation
 
