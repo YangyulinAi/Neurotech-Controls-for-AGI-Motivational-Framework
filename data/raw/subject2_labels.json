@@ -1,0 +1,15 @@
+{
+    "s2_1":  { "valence": 2, "arousal": 2 },
+    "s2_2":  { "valence": 1, "arousal": 3 },
+    "s2_3":  { "valence": 1, "arousal": 4 },
+    "s2_4":  { "valence": 3, "arousal": 4 },
+    "s2_5":  { "valence": 1, "arousal": 4 },
+    "s2_6":  { "valence": 1, "arousal": 2 },
+    "s2_7":  { "valence": 1, "arousal": 4 },
+    "s2_8":  { "valence": 1, "arousal": 1 },
+    "s2_9":  { "valence": 1, "arousal": 4 },
+    "s2_10": { "valence": 1, "arousal": 1 },
+    "s2_11": { "valence": 1, "arousal": 3 },
+    "s2_12": { "valence": 4, "arousal": 3 }
+  }
+  
