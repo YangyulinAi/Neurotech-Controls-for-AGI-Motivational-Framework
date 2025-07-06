@@ -4,7 +4,7 @@ A comprehensive machine learning-based EEG emotion prediction platform that prov
 
 *Developed by Neural Axis*
 
-![System Dashboard](generated-icon.png)
+
 
 ## 🚀 Features
 
@@ -336,13 +336,12 @@ Regularly backup:
 - `valence/arousal data` - Real-time predictions
 - `analysis_complete` - Analysis finished
 
-## 📄 License
-
-[Add your license information here]
 
 ## 🤝 Contributing
 
-[Add contribution guidelines here]
+Yangyulin Ai
+
+Dr. Gabriel Axel Montes
 
 ## 📞 Support
 
