@@ -1,0 +1,9 @@
+{
+  "subject_id": "s1",
+  "description": "EEG data for subject 1 - emotion recognition experiment",
+  "label_type": "continuous",
+  "valence_range": [-1, 1],
+  "arousal_range": [-1, 1],
+  "files": {
+  }
+}

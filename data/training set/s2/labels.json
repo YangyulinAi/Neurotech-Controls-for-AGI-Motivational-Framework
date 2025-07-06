@@ -1,0 +1,21 @@
+{
+  "subject_id": "s2",
+  "description": "EEG data for subject 2 - emotion recognition experiment",
+  "label_type": "continuous",
+  "valence_range": [-1, 1],
+  "arousal_range": [-1, 1],
+  "files": {
+    "s2_1.set": { "valence": -0.2, "arousal": 0.3, "emotion": "calm_positive" },
+    "s2_2.set": { "valence": -0.5, "arousal": 0.6, "emotion": "anxious" },
+    "s2_3.set": { "valence": -0.5, "arousal": 0.8, "emotion": "stressed" },
+    "s2_4.set": { "valence": 0.6, "arousal": 0.8, "emotion": "excited" },
+    "s2_5.set": { "valence": -0.5, "arousal": 0.8, "emotion": "upset" },
+    "s2_6.set": { "valence": -0.5, "arousal": 0.3, "emotion": "sad" },
+    "s2_7.set": { "valence": -0.5, "arousal": 0.8, "emotion": "frustrated" },
+    "s2_8.set": { "valence": -0.5, "arousal": -0.7, "emotion": "depressed" },
+    "s2_9.set": { "valence": -0.5, "arousal": 0.8, "emotion": "agitated" },
+    "s2_10.set": { "valence": -0.5, "arousal": -0.7, "emotion": "tired" },
+    "s2_11.set": { "valence": -0.5, "arousal": 0.6, "emotion": "worried" },
+    "s2_12.set": { "valence": 0.8, "arousal": 0.6, "emotion": "happy" }
+  }
+}
