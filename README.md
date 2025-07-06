@@ -336,13 +336,11 @@ Regularly backup:
 - `valence/arousal data` - Real-time predictions
 - `analysis_complete` - Analysis finished
 
-## 📄 License
-
-[Add your license information here]
 
 ## 🤝 Contributing
 
-[Add contribution guidelines here]
+Yangyulin Ai
+Dr. Gabriel Axel Montes
 
 ## 📞 Support
 
