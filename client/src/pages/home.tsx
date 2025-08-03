@@ -4,6 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 
 export default function Home() {
@@ -25,6 +28,12 @@ export default function Home() {
   const [learningRate, setLearningRate] = useState(0.0001);
   const [windowSize, setWindowSize] = useState(5.0);
   const [overlap, setOverlap] = useState(0.5);
+  
+  // IIT Φ 计算状态
+  const [showPhiInterface, setShowPhiInterface] = useState(false);
+  const [enablePhi, setEnablePhi] = useState(false);
+  const [phiMethod, setPhiMethod] = useState<'mock' | 'IIT3.0' | 'IIT4.0_light'>('mock');
+  const [phiMaxChannels, setPhiMaxChannels] = useState(8);
 
   // Fetch available data files for analysis
   const fetchDataFiles = async () => {
@@ -59,7 +68,7 @@ export default function Home() {
       const response = await fetch('/api/training-subjects');
       if (response.ok) {
         const subjects = await response.json();
-        setDataFiles(subjects.map(s => s.id)); // Use subject IDs as file list
+        setDataFiles(subjects.map((s: any) => s.id)); // Use subject IDs as file list
       } else {
         toast({
           title: 'Error',
@@ -89,29 +98,59 @@ export default function Home() {
 
   // Handle real data analysis
   const handleDataSelection = async (filename: string) => {
+    console.log('=== Starting Analysis Debug ===');
+    console.log('Selected file:', filename);
+    console.log('Environment:', {
+      protocol: window.location.protocol,
+      host: window.location.host,
+      pathname: window.location.pathname
+    });
+    
     try {
+      const requestBody = { 
+        filename,
+        computePhi: true,
+        phiMethod: 'mock'
+      };
+      
+      console.log('Sending analysis request:', requestBody);
+      
       const response = await fetch('/api/start-analysis', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ filename }),
+        body: JSON.stringify(requestBody),
       });
 
+      console.log('Analysis response status:', response.status);
+      console.log('Analysis response headers:', Object.fromEntries(response.headers.entries()));
+
       if (response.ok) {
+        const result = await response.json();
+        console.log('=== Analysis Started Successfully ===');
+        console.log('Analysis response data:', result);
+        console.log('Analysis PID:', result.pid);
+        console.log('Analysis file path:', result.filename);
+        console.log('Phi computation enabled:', result.computePhi);
+        
         setShowDataSelection(false);
         setLocation('/dashboard');
         toast({
           title: 'Real Data Analysis Started',
-          description: `Now analyzing real EEG data from ${filename}`,
+          description: result.message || `Now analyzing real EEG data from ${filename}`,
+          duration: 8000,
         });
       } else {
-        throw new Error('Failed to start analysis');
+        const errorText = await response.text();
+        console.error('Analysis failed with response:', errorText);
+        throw new Error(`Failed to start analysis: ${response.statusText} - ${errorText}`);
       }
     } catch (error) {
+      console.error('Error starting analysis:', error);
       toast({
         title: 'Error',
-        description: 'Failed to start real data analysis',
+        description: `Failed to start real data analysis: ${error.message}`,
         variant: 'destructive',
       });
     }
@@ -223,7 +262,10 @@ export default function Home() {
           batchSize: batchSize,
           learningRate: learningRate,
           windowSize: windowSize,
-          overlap: overlap
+          overlap: overlap,
+          computePhi: enablePhi,
+          phiMethod: phiMethod,
+          phiMaxChannels: phiMaxChannels
         }),
       });
 
@@ -318,6 +360,42 @@ export default function Home() {
     setSelectedTrainingFiles([]);
   };
 
+  // IIT Φ quick test function
+  const handlePhiQuickTest = async () => {
+    try {
+      const response = await fetch('/api/test-phi', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          method: phiMethod,
+          maxChannels: phiMaxChannels,
+          testSamples: 4
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        toast({
+          title: '✓ IIT Φ Test Completed',
+          description: `Method: ${phiMethod}, Average Φ: ${result.avgPhi?.toFixed(6) || '0.000000'}`,
+          duration: 6000,
+        });
+      } else {
+        throw new Error('Φ test failed');
+      }
+    } catch (error) {
+      toast({
+        title: 'Φ Test Failed',
+        description: 'Please check if backend service is running properly',
+        variant: 'destructive',
+      });
+    }
+  };
+
+
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
       {/* Header */}
@@ -369,7 +447,7 @@ export default function Home() {
         </div>
 
         {/* Feature Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12 max-w-6xl mx-auto">
           {/* Real Data Analysis */}
           <Card className="bg-gray-800 border-gray-700 hover:bg-gray-750 transition-colors cursor-pointer group">
             <CardHeader>
@@ -501,57 +579,113 @@ export default function Home() {
             </CardContent>
           </Card>
 
-          {/* System Configuration */}
-          <Card className="bg-gray-800 border-gray-700 hover:bg-gray-750 transition-colors">
+          {/* IIT Φ 计算功能 */}
+          <Card className="bg-gray-800 border-gray-700 hover:bg-gray-750 transition-colors cursor-pointer group">
             <CardHeader>
               <div className="flex items-center justify-between">
-                <div className="h-8 w-8 text-orange-400">⚙️</div>
-                <Badge>Config</Badge>
+                <div className="h-8 w-8 text-cyan-400 group-hover:text-cyan-300 transition-colors">🧮</div>
+                <Badge className="bg-cyan-600/20 text-cyan-300 border-cyan-500/50">IIT Φ</Badge>
               </div>
-              <CardTitle className="text-white">System Configuration</CardTitle>
+              <CardTitle className="text-white">Consciousness Analysis</CardTitle>
               <CardDescription className="text-gray-400">
-                Configure sampling rates, channels, and processing parameters
+                Test IIT Φ (consciousness complexity) calculation with multiple algorithms and configuration options
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Button 
-                className="w-full bg-orange-600 hover:bg-orange-700"
-                onClick={() => {
-                  toast({
-                    title: 'Configuration',
-                    description: 'Configuration panel will be available in the next update.',
-                  });
-                }}
+                onClick={() => setShowPhiInterface(true)}
+                className="w-full bg-cyan-600 hover:bg-cyan-700"
               >
-                ⚙️ Configure System
+                🧠 Test Φ Calculation
               </Button>
             </CardContent>
           </Card>
 
-          {/* Status Card */}
-          <Card className="bg-gray-800 border-gray-700">
+          {/* Production Debug */}
+          <Card className="bg-gray-800 border-gray-700 hover:bg-gray-750 transition-colors cursor-pointer group">
             <CardHeader>
-              <CardTitle className="text-white">System Status</CardTitle>
+              <div className="flex items-center justify-between">
+                <div className="h-8 w-8 text-red-400 group-hover:text-red-300 transition-colors">🔧</div>
+                <Badge className="bg-red-600/20 text-red-300 border-red-500/50">Debug</Badge>
+              </div>
+              <CardTitle className="text-white">Production Debug</CardTitle>
+              <CardDescription className="text-gray-400">
+                Test production environment functionality, Python dependencies, and analysis pipeline
+              </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-400">WebSocket Server</span>
-                <Badge className="bg-green-500 text-white">Online</Badge>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-400">ONNX Model</span>
-                <Badge className="bg-green-500 text-white">Loaded</Badge>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-400">Data Stream</span>
-                <Badge className="bg-blue-500 text-white">Active</Badge>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-400">BCI Client</span>
-                <Badge className="bg-green-500 text-white">Connected</Badge>
+            <CardContent>
+              <div className="space-y-2">
+                <Button 
+                  onClick={async () => {
+                    try {
+                      console.log('Installing production dependencies...');
+                      toast({
+                        title: 'Installing Dependencies',
+                        description: 'Installing onnxruntime and required packages...',
+                      });
+                      
+                      const response = await fetch('/api/install-production-deps', { method: 'POST' });
+                      const result = await response.json();
+                      console.log('=== Installation Result ===');
+                      console.log('Success:', result.success);
+                      console.log('Output:', result.output);
+                      console.log('Error:', result.error);
+                      
+                      toast({
+                        title: result.success ? 'Dependencies Installed' : 'Installation Failed',
+                        description: result.success ? 'ONNX Runtime and dependencies installed successfully' : 'Check console for details',
+                        variant: result.success ? 'default' : 'destructive'
+                      });
+                    } catch (error) {
+                      console.error('Installation error:', error);
+                      toast({
+                        title: 'Installation Error',
+                        description: 'Failed to install dependencies',
+                        variant: 'destructive'
+                      });
+                    }
+                  }}
+                  className="w-full bg-green-600 hover:bg-green-700"
+                >
+                  📦 Install Missing Dependencies
+                </Button>
+                
+                <Button 
+                  onClick={async () => {
+                    try {
+                      console.log('Starting production environment debug test...');
+                      const response = await fetch('/api/debug-production', { method: 'POST' });
+                      const result = await response.json();
+                      console.log('=== Production Debug Result ===');
+                      console.log('Success:', result.success);
+                      console.log('Output:', result.output);
+                      console.log('Error:', result.error);
+                      console.log('Environment:', result.environment);
+                      toast({
+                        title: result.success ? 'Debug Test Passed' : 'Debug Test Failed',
+                        description: result.success ? 'Production environment is working' : 'Check console for details',
+                        variant: result.success ? 'default' : 'destructive'
+                      });
+                    } catch (error) {
+                      console.error('Debug test error:', error);
+                      toast({
+                        title: 'Debug Test Error',
+                        description: 'Failed to run production debug test',
+                        variant: 'destructive'
+                      });
+                    }
+                  }}
+                  className="w-full bg-red-600 hover:bg-red-700"
+                >
+                  🔍 Test Production Environment
+                </Button>
               </div>
             </CardContent>
           </Card>
+
+
+
+
         </div>
 
         {/* Quick Start Guide */}
@@ -927,6 +1061,119 @@ export default function Home() {
               >
                 {isTraining ? 'Training...' : 'Start Training'}
               </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* IIT Φ Test Dialog */}
+      <Dialog open={showPhiInterface} onOpenChange={setShowPhiInterface}>
+        <DialogContent className="bg-gray-800 border-gray-700 text-white max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              🧮 IIT Φ Consciousness Complexity Test
+            </DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Test Integrated Information Theory (IIT) Φ calculation functionality, select algorithms and parameters to analyze consciousness complexity
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6">
+            {/* Calculation Method Selection */}
+            <div className="space-y-2">
+              <Label className="text-gray-300">Calculation Method</Label>
+              <Select value={phiMethod} onValueChange={(value: any) => setPhiMethod(value)}>
+                <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="mock">Mock (Placeholder Mode)</SelectItem>
+                  <SelectItem value="IIT3.0">IIT 3.0 (Standard Algorithm)</SelectItem>
+                  <SelectItem value="IIT4.0_light">IIT 4.0 Light (Lightweight)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-gray-500">
+                {phiMethod === 'mock' && 'Returns fixed value 0, for testing integration'}
+                {phiMethod === 'IIT3.0' && 'Standard IIT algorithm, computationally intensive, recommend fewer channels'}
+                {phiMethod === 'IIT4.0_light' && 'Lightweight approximation algorithm, suitable for real-time computation'}
+              </p>
+            </div>
+
+            {/* Maximum Channels */}
+            <div className="space-y-2">
+              <Label className="text-gray-300">Maximum Channels</Label>
+              <Select value={phiMaxChannels.toString()} onValueChange={(value) => setPhiMaxChannels(parseInt(value))}>
+                <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="4">4 Channels (Fast)</SelectItem>
+                  <SelectItem value="6">6 Channels (Balanced)</SelectItem>
+                  <SelectItem value="8">8 Channels (Standard)</SelectItem>
+                  <SelectItem value="12">12 Channels (Slow)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-gray-500">
+                More channels increase computation time, IIT 3.0 recommended max 8 channels
+              </p>
+            </div>
+
+            {/* Enable in Training */}
+            <div className="flex items-center space-x-2">
+              <Checkbox 
+                id="enable-phi" 
+                checked={enablePhi}
+                onCheckedChange={setEnablePhi}
+                className="border-gray-600"
+              />
+              <Label htmlFor="enable-phi" className="text-gray-300 cursor-pointer">
+                Enable Φ calculation in next training
+              </Label>
+            </div>
+
+            {/* Information */}
+            <div className="bg-gray-900/50 border border-gray-600 rounded-lg p-4">
+              <h4 className="text-sm font-medium text-cyan-400 mb-2">💡 Feature Information</h4>
+              <ul className="text-xs text-gray-400 space-y-1">
+                <li>• Mock mode: No performance impact, returns 0 value</li>
+                <li>• IIT 3.0: Requires PyPhi library, accurate but time-consuming</li>
+                <li>• IIT 4.0: Lightweight algorithm, suitable for real-time analysis</li>
+                <li>• When enabled, training progress will display real-time Φ values</li>
+              </ul>
+            </div>
+
+            {/* Button Group */}
+            <div className="flex justify-between pt-4">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowPhiInterface(false)}
+                className="border-gray-600 text-gray-300 hover:bg-gray-700"
+              >
+                Cancel
+              </Button>
+              <div className="space-x-2">
+                <Button 
+                  onClick={handlePhiQuickTest}
+                  className="bg-cyan-600 hover:bg-cyan-700"
+                >
+                  🧪 Quick Test
+                </Button>
+                <Button 
+                  onClick={() => {
+                    setShowPhiInterface(false);
+                    toast({
+                      title: '✓ Φ Calculation Config Saved',
+                      description: enablePhi ? 
+                        `Next training will use ${phiMethod} method to calculate Φ values` : 
+                        'Φ calculation disabled',
+                      duration: 4000,
+                    });
+                  }}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  💾 Save Config
+                </Button>
+              </div>
             </div>
           </div>
         </DialogContent>

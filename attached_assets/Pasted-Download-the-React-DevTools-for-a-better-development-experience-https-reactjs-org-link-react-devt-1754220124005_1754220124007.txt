@@ -1,0 +1,12 @@
+Download the React DevTools for a better development experience: https://reactjs.org/link/react-devtools
+training-progress.tsx:35 Training progress WebSocket connected to wss://agi.deeps.net.cn/ws
+training-progress.tsx:41 Training progress component received data: Object
+use-websocket.ts:65 Received WebSocket message: Object
+use-websocket.ts:69 WebSocket connection message: Connected to BCI data stream
+use-websocket.ts:65 Received WebSocket message: Object
+training-progress.tsx:41 Training progress component received data: Objectfilename: "set/s2/s2_3.set"message: "Real data analysis completed"type: "analysis_complete"[[Prototype]]: Objectconstructor: ƒ Object()hasOwnProperty: ƒ hasOwnProperty()isPrototypeOf: ƒ isPrototypeOf()propertyIsEnumerable: ƒ propertyIsEnumerable()toLocaleString: ƒ toLocaleString()toString: ƒ toString()valueOf: ƒ valueOf()__defineGetter__: ƒ __defineGetter__()__defineSetter__: ƒ __defineSetter__()__lookupGetter__: ƒ __lookupGetter__()__lookupSetter__: ƒ __lookupSetter__()__proto__: (...)get __proto__: ƒ __proto__()set __proto__: ƒ __proto__()
+training-progress.tsx:59 Training progress WebSocket disconnected
+training-progress.tsx:35 Training progress WebSocket connected to wss://agi.deeps.net.cn/ws
+training-progress.tsx:41 Training progress component received data: Objectmessage: "Connected to BCI data stream"timestamp: "2025-08-03T11:20:44.233Z"type: "connection"[[Prototype]]: Objectconstructor: ƒ Object()hasOwnProperty: ƒ hasOwnProperty()isPrototypeOf: ƒ isPrototypeOf()propertyIsEnumerable: ƒ propertyIsEnumerable()toLocaleString: ƒ toLocaleString()toString: ƒ toString()valueOf: ƒ valueOf()__defineGetter__: ƒ __defineGetter__()__defineSetter__: ƒ __defineSetter__()__lookupGetter__: ƒ __lookupGetter__()__lookupSetter__: ƒ __lookupSetter__()__proto__: (...)get __proto__: ƒ __proto__()set __proto__: ƒ __proto__()
+use-websocket.ts:65 Received WebSocket message: Objectmessage: "Connected to BCI data stream"timestamp: "2025-08-03T11:20:44.839Z"type: "connection"[[Prototype]]: Objectconstructor: ƒ Object()hasOwnProperty: ƒ hasOwnProperty()isPrototypeOf: ƒ isPrototypeOf()propertyIsEnumerable: ƒ propertyIsEnumerable()toLocaleString: ƒ toLocaleString()toString: ƒ toString()valueOf: ƒ valueOf()__defineGetter__: ƒ __defineGetter__()__defineSetter__: ƒ __defineSetter__()__lookupGetter__: ƒ __lookupGetter__()__lookupSetter__: ƒ __lookupSetter__()__proto__: (...)get __proto__: ƒ __proto__()set __proto__: ƒ __proto__()
+use-websocket.ts:69 WebSocket connection message: Connected to BCI data stream

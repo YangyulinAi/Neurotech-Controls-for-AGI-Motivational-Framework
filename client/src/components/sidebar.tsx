@@ -5,7 +5,7 @@ interface SidebarProps {
   connectionStatus: ConnectionStatus;
 }
 
-export function Sidebar({ connectionStatus }: SidebarProps) {
+export function Sidebar({ connectionStatus, dataFlowStatus }: SidebarProps & { dataFlowStatus?: any }) {
   return (
     <div className="w-64 bg-secondary-dark border-r border-surface p-6 hidden lg:block">
       <div className="flex items-center mb-8">
@@ -49,13 +49,15 @@ export function Sidebar({ connectionStatus }: SidebarProps) {
       {/* Connection Status */}
       <div className="mt-8 p-4 bg-surface rounded-lg">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-sm text-secondary-light">Connection</span>
+          <span className="text-sm text-secondary-light">System Status</span>
           <Circle
             className={`w-3 h-3 rounded-full ${
-              connectionStatus.connected
+              connectionStatus.connected && dataFlowStatus?.isReceivingData
                 ? 'text-accent-green connection-pulse'
-                : connectionStatus.error
+                : connectionStatus.connected && !dataFlowStatus?.isReceivingData  
                 ? 'text-accent-orange'
+                : connectionStatus.error
+                ? 'text-accent-red'
                 : 'text-muted-light'
             }`}
             fill="currentColor"
@@ -81,10 +83,28 @@ export function Sidebar({ connectionStatus }: SidebarProps) {
             </span>
           </div>
           <div>
-            Last Update:{' '}
+            Data Flow:{' '}
+            <span
+              className={
+                dataFlowStatus?.isReceivingData
+                  ? 'text-accent-green'
+                  : dataFlowStatus?.analysisActive
+                  ? 'text-accent-yellow'
+                  : 'text-accent-red'
+              }
+            >
+              {dataFlowStatus?.isReceivingData
+                ? 'Active'
+                : dataFlowStatus?.analysisActive
+                ? 'Processing'
+                : 'No Data'}
+            </span>
+          </div>
+          <div>
+            Last Data:{' '}
             <span>
-              {connectionStatus.lastUpdate
-                ? connectionStatus.lastUpdate.toLocaleTimeString()
+              {dataFlowStatus?.lastDataTime
+                ? dataFlowStatus.lastDataTime.toLocaleTimeString()
                 : '--:--:--'}
             </span>
           </div>

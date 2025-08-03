@@ -1,0 +1,177 @@
+# Feature Extraction Configuration for Neural Axis BCI
+# DFR5 Enhanced Feature Extraction Parameters
+
+# Frequency Band Configuration
+frequency_bands:
+  delta:
+    range: [0.5, 4.0]
+    name: "Delta"
+    description: "Deep sleep, unconscious processes"
+  
+  theta:
+    range: [4.0, 8.0]
+    name: "Theta"
+    description: "Drowsiness, meditation, memory"
+  
+  alpha:
+    range: [8.0, 13.0]
+    name: "Alpha"
+    description: "Relaxed awareness, eyes closed"
+  
+  beta:
+    range: [13.0, 30.0]
+    name: "Beta"
+    description: "Active concentration, alertness"
+  
+  gamma:
+    range: [30.0, 45.0]
+    name: "Gamma"
+    description: "High-level cognitive processing"
+
+# Differential Entropy Configuration
+differential_entropy:
+  enabled: true
+  window_size: 1.0  # seconds
+  overlap: 0.5      # 50% overlap
+  normalize: true
+  log_transform: true
+
+# Power Spectral Features
+power_spectral:
+  enabled: true
+  method: "welch"
+  nperseg: 256
+  noverlap: 128
+  normalize_power: true
+
+# Frontal Alpha Asymmetry (FAA)
+frontal_alpha_asymmetry:
+  enabled: true
+  auto_detect_channels: true
+  alpha_band: [8.0, 13.0]
+  computation_method: "log_ratio"  # Options: log_ratio, difference, ratio
+  
+  # Manual channel specification (if auto_detect fails)
+  manual_channels:
+    left: "F3"   # Or AF7 for Muse2
+    right: "F4"  # Or AF8 for Muse2
+
+# Spatial Features
+spatial_features:
+  preserve_structure: true
+  channel_grouping:
+    frontal: ["Fp1", "Fp2", "F7", "F3", "Fz", "F4", "F8"]
+    central: ["T7", "C3", "Cz", "C4", "T8"]
+    parietal: ["P7", "P3", "Pz", "P4", "P8"]
+    occipital: ["O1", "O2"]
+  
+  # Connectivity features
+  connectivity:
+    enabled: false
+    methods: ["coherence", "phase_locking"]
+    reference_channels: ["Cz"]
+
+# Spectrogram Configuration
+spectrogram:
+  enabled: true
+  window_function: "hann"
+  nperseg: 128
+  noverlap: 64
+  output_size: [224, 224]  # Standard CNN input size
+  channels: "average"      # Options: average, separate, spatial_map
+  
+  # Multi-channel spectrogram
+  spatial_spectrogram:
+    enabled: true
+    preserve_topology: true
+    interpolation_method: "linear"
+
+# Advanced Features (DFR5)
+advanced_features:
+  # Hjorth Parameters
+  hjorth_parameters:
+    enabled: true
+    compute_derivatives: true
+  
+  # Sample Entropy
+  sample_entropy:
+    enabled: true
+    pattern_length: 2
+    tolerance: 0.2
+  
+  # Wavelet Features
+  wavelet_features:
+    enabled: false
+    wavelet: "db4"
+    levels: 5
+    compute_energy: true
+  
+  # Microstate Analysis
+  microstates:
+    enabled: false
+    n_states: 4
+    gfp_threshold: 0.1
+
+# Quality Control
+quality_control:
+  enabled: true
+  
+  # Signal quality checks
+  amplitude_checks:
+    min_amplitude: 1.0   # μV
+    max_amplitude: 100.0 # μV
+  
+  # Artifact detection
+  artifact_detection:
+    muscle_artifacts: true
+    eye_blink_detection: true
+    electrode_drift: true
+  
+  # Channel quality
+  channel_quality:
+    correlation_threshold: 0.1
+    variance_threshold: 0.01
+
+# Output Configuration
+output:
+  feature_vector_size: 26  # Total combined features
+  normalize_features: true
+  feature_selection: false
+  
+  # Feature importance ranking
+  ranking:
+    enabled: false
+    method: "mutual_info"
+    top_k: 20
+
+# Device-Specific Adaptations
+device_adaptations:
+  Muse2:
+    frequency_bands:
+      alpha: [8.0, 12.0]  # Slightly adjusted for Muse2
+    faa_channels: ["AF7", "AF8"]
+  
+  X.on:
+    sampling_rate_adjustment: true
+    reference_montage: "average"
+  
+  OpenBCI_Cyton:
+    impedance_check: true
+    dc_offset_removal: true
+  
+  Standard_10_20:
+    full_montage: true
+    spatial_filtering: true
+
+# Performance Optimization
+optimization:
+  parallel_processing: true
+  max_workers: 4
+  memory_efficient: true
+  caching: true
+  
+  # GPU acceleration
+  gpu_acceleration:
+    enabled: false
+    device: "cuda:0"
+    fallback_to_cpu: true

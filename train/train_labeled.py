@@ -14,25 +14,53 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import LeaveOneGroupOut, StratifiedKFold, KFold
 import scipy.io
+import matplotlib.pyplot as plt
+import time
+import requests
+import yaml
 
 # Add parent directory to path for imports
 sys.path.append(str(Path(__file__).parent.parent))
+
+# 导入 IIT Φ 计算器
+try:
+    from src.phi_estimator import PhiEstimator
+    PHI_AVAILABLE = True
+    print("✓ IIT Φ 计算器模块加载成功")
+except ImportError as e:
+    PHI_AVAILABLE = False
+    print(f"警告: IIT Φ 计算器不可用 ({e})，将跳过 Φ 计算功能")
+
 from model_cnn_tcn import EmotionNet
 from src.preprocess import extract_feats
 
-def ccc(pred, gold):
-    """Concordance Correlation Coefficient loss"""
-    pred_mean = torch.mean(pred, dim=0)
-    gold_mean = torch.mean(gold, dim=0)
+def concordance_correlation_coefficient(y_true, y_pred):
+    """Compute Concordance Correlation Coefficient"""
+    x = y_true.flatten()
+    y = y_pred.flatten()
     
-    pred_var = torch.var(pred, dim=0)
-    gold_var = torch.var(gold, dim=0)
+    mean_x = torch.mean(x)
+    mean_y = torch.mean(y)
+    var_x = torch.var(x, unbiased=False)
+    var_y = torch.var(y, unbiased=False)
+    cov_xy = torch.mean((x - mean_x) * (y - mean_y))
     
-    covariance = torch.mean((pred - pred_mean) * (gold - gold_mean), dim=0)
-    
-    ccc_val = (2 * covariance) / (pred_var + gold_var + (pred_mean - gold_mean)**2)
-    return 1 - torch.mean(ccc_val)
+    # Add small epsilon for numerical stability
+    eps = 1e-8
+    ccc = (2 * cov_xy) / (var_x + var_y + (mean_x - mean_y)**2 + eps)
+    return ccc
+
+def ccc_loss(pred, gold):
+    """CCC Loss function (1 - CCC to minimize)"""
+    return 1 - concordance_correlation_coefficient(gold, pred)
+
+def mixed_loss(pred, gold, alpha=0.7):
+    """Mixed CCC and MSE loss"""
+    mse = nn.MSELoss()(pred, gold)
+    ccc_l = ccc_loss(pred, gold)
+    return alpha * ccc_l + (1 - alpha) * mse
 
 def mse_loss(pred, gold):
     """Mean Squared Error loss"""
@@ -239,24 +267,57 @@ def train(args):
         num_workers=0  # Avoid multiprocessing issues
     )
     
-    # Initialize model
-    model = EmotionNet().to(device)
+    # Initialize model with DFR5 enhancements
+    model = EmotionNet(
+        use_batch_norm=args.use_batch_norm,
+        dropout_rate=args.dropout_rate
+    ).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode='min', factor=0.5, patience=5
     )
     
+    # 初始化 Φ 计算器（如果启用）
+    phi_estimator = None
+    if args.compute_phi and PHI_AVAILABLE:
+        try:
+            # 加载配置文件（如果存在）
+            phi_config = {}
+            if os.path.exists(args.phi_config):
+                with open(args.phi_config, 'r') as f:
+                    phi_config = yaml.safe_load(f)
+            
+            phi_estimator = PhiEstimator(
+                method=args.phi_method,
+                max_channels=args.phi_max_channels,
+                **phi_config
+            )
+            print(f"✓ IIT Φ 计算器已启用: {phi_estimator.get_info()}")
+        except Exception as e:
+            print(f"⚠️ Φ 计算器初始化失败: {e}")
+            phi_estimator = None
+    elif args.compute_phi and not PHI_AVAILABLE:
+        print("⚠️ 请求启用 Φ 计算，但模块不可用，将跳过")
+
     # Training loop
     print(f"Starting training for {args.epochs} epochs...")
     print(f"Batch size: {args.batch_size}, Learning rate: {args.lr}")
     print(f"Window size: {args.window_size}s, Overlap: {args.overlap}")
+    print(f"Φ 计算: {'启用' if phi_estimator else '禁用'}")
     
     best_loss = float('inf')
     patience_counter = 0
     
+    # Training visualization data
+    train_losses = []
+    epoch_times = []
+    learning_rates = []
+    
     for epoch in range(args.epochs):
+        epoch_start_time = time.time()
         model.train()
         total_loss = 0.0
+        batch_losses = []
         
         for batch_idx, (spec, de, labels) in enumerate(dataloader):
             spec = spec.to(device)
@@ -266,20 +327,72 @@ def train(args):
             optimizer.zero_grad()
             pred = model(spec, de)
             
-            # Use MSE loss for continuous labels
-            loss = mse_loss(pred, labels)
+            # Use specified loss function
+            if args.loss_fn == 'CCC':
+                loss = ccc_loss(pred, labels)
+            elif args.loss_fn == 'mixed':
+                loss = mixed_loss(pred, labels, alpha=0.7)
+            else:  # MSE
+                loss = mse_loss(pred, labels)
             
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
             
-            total_loss += loss.item()
+            batch_loss = loss.item()
+            batch_losses.append(batch_loss)
+            
+            total_loss += batch_loss
             
             if batch_idx % 10 == 0:
-                print(f"E{epoch+1}/{args.epochs} Batch {batch_idx}/{len(dataloader)} loss={loss.item():.4f}")
+                print(f"E{epoch+1}/{args.epochs} Batch {batch_idx}/{len(dataloader)} loss={batch_loss:.4f}")
         
+        epoch_time = time.time() - epoch_start_time
         avg_loss = total_loss / len(dataloader)
-        print(f"E{epoch+1}/{args.epochs} loss={avg_loss:.4f}")
+        current_lr = optimizer.param_groups[0]['lr']
+        
+        # Store training metrics
+        train_losses.append(avg_loss)
+        epoch_times.append(epoch_time)
+        learning_rates.append(current_lr)
+        
+        print(f"E{epoch+1}/{args.epochs} loss={avg_loss:.4f} time={epoch_time:.1f}s lr={current_lr:.6f}")
+        
+        # 计算 Φ 值（如果启用）
+        phi_values = None
+        if phi_estimator is not None:
+            try:
+                # 从最后一个批次获取原始 EEG 数据进行 Φ 计算
+                # 注意：这里是示例，实际应用中可能需要从数据集中获取原始 EEG
+                sample_batch = spec[:min(4, spec.size(0))]  # 取少量样本避免计算过载
+                phi_values = phi_estimator.compute(sample_batch)
+                avg_phi = phi_values.mean().item() if len(phi_values) > 0 else 0.0
+                print(f"      Φ = {avg_phi:.6f} (样本数: {len(phi_values)})")
+            except Exception as e:
+                print(f"      Φ 计算失败: {e}")
+                avg_phi = 0.0
+
+        # Send training progress to frontend
+        try:
+            progress_data = {
+                "type": "training_progress",
+                "epoch": epoch + 1,
+                "total_epochs": args.epochs,
+                "loss": avg_loss,
+                "best_loss": best_loss,
+                "learning_rate": current_lr,
+                "epoch_time": epoch_time,
+                "progress_percentage": ((epoch + 1) / args.epochs) * 100
+            }
+            
+            # 添加 Φ 值（如果可用）
+            if phi_values is not None:
+                progress_data["phi"] = avg_phi
+                
+            requests.post('http://localhost:5000/api/bci/broadcast', 
+                         json=progress_data, timeout=1)
+        except:
+            pass  # Ignore if can't send to frontend
         
         # Save best model
         if avg_loss < best_loss:
@@ -299,6 +412,9 @@ def train(args):
             break
     
     print(f"Training completed. Best loss: {best_loss:.4f}")
+    
+    # Create training visualization
+    create_training_plots(train_losses, epoch_times, learning_rates, args.checkpoint_path)
     
     # Export to ONNX
     print("Exporting to ONNX...")
@@ -326,6 +442,108 @@ def train(args):
     )
     print(f"ONNX exported to {args.onnx_path}")
 
+def create_training_plots(train_losses, epoch_times, learning_rates, checkpoint_path):
+    """Create and save training visualization plots"""
+    print("Creating training visualization plots...")
+    
+    # Set up the plotting style
+    plt.style.use('default')
+    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 10))
+    
+    epochs = range(1, len(train_losses) + 1)
+    
+    # Plot 1: Training Loss
+    ax1.plot(epochs, train_losses, 'b-', linewidth=2, label='Training Loss')
+    ax1.set_xlabel('Epoch')
+    ax1.set_ylabel('MSE Loss')
+    ax1.set_title('Training Loss Over Time')
+    ax1.grid(True, alpha=0.3)
+    ax1.legend()
+    
+    # Plot 2: Learning Rate
+    ax2.plot(epochs, learning_rates, 'r-', linewidth=2, label='Learning Rate')
+    ax2.set_xlabel('Epoch')
+    ax2.set_ylabel('Learning Rate')
+    ax2.set_title('Learning Rate Schedule')
+    ax2.set_yscale('log')
+    ax2.grid(True, alpha=0.3)
+    ax2.legend()
+    
+    # Plot 3: Training Time per Epoch
+    ax3.bar(epochs, epoch_times, alpha=0.7, color='green', label='Epoch Time')
+    ax3.set_xlabel('Epoch')
+    ax3.set_ylabel('Time (seconds)')
+    ax3.set_title('Training Time per Epoch')
+    ax3.grid(True, alpha=0.3)
+    ax3.legend()
+    
+    # Plot 4: Loss Improvement
+    if len(train_losses) > 1:
+        loss_improvements = []
+        for i in range(1, len(train_losses)):
+            improvement = train_losses[i-1] - train_losses[i]
+            loss_improvements.append(improvement)
+        
+        ax4.plot(range(2, len(train_losses) + 1), loss_improvements, 'purple', 
+                linewidth=2, marker='o', markersize=4, label='Loss Improvement')
+        ax4.axhline(y=0, color='red', linestyle='--', alpha=0.5)
+        ax4.set_xlabel('Epoch')
+        ax4.set_ylabel('Loss Improvement')
+        ax4.set_title('Loss Improvement per Epoch')
+        ax4.grid(True, alpha=0.3)
+        ax4.legend()
+    else:
+        ax4.text(0.5, 0.5, 'Not enough data\nfor loss improvement', 
+                ha='center', va='center', transform=ax4.transAxes)
+        ax4.set_title('Loss Improvement per Epoch')
+    
+    plt.tight_layout()
+    
+    # Save the plot
+    plot_path = checkpoint_path.replace('.pt', '_training_plots.png')
+    plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    
+    print(f"Training plots saved to: {plot_path}")
+    
+    # Create summary statistics
+    create_training_summary(train_losses, epoch_times, learning_rates, checkpoint_path)
+
+def create_training_summary(train_losses, epoch_times, learning_rates, checkpoint_path):
+    """Create and save training summary statistics"""
+    summary = {
+        "training_completed": True,
+        "total_epochs": len(train_losses),
+        "final_loss": float(train_losses[-1]) if train_losses else 0.0,
+        "best_loss": float(min(train_losses)) if train_losses else 0.0,
+        "total_training_time": float(sum(epoch_times)) if epoch_times else 0.0,
+        "average_epoch_time": float(np.mean(epoch_times)) if epoch_times else 0.0,
+        "initial_lr": float(learning_rates[0]) if learning_rates else 0.0,
+        "final_lr": float(learning_rates[-1]) if learning_rates else 0.0,
+        "loss_reduction": float(train_losses[0] - train_losses[-1]) if len(train_losses) > 1 else 0.0,
+        "loss_reduction_percentage": float((train_losses[0] - train_losses[-1]) / train_losses[0] * 100) if len(train_losses) > 1 and train_losses[0] > 0 else 0.0
+    }
+    
+    # Save summary as JSON
+    summary_path = checkpoint_path.replace('.pt', '_training_summary.json')
+    with open(summary_path, 'w') as f:
+        json.dump(summary, f, indent=2)
+    
+    # Print summary to console
+    print("\n" + "="*50)
+    print("TRAINING SUMMARY")
+    print("="*50)
+    print(f"Total Epochs: {summary['total_epochs']}")
+    print(f"Best Loss: {summary['best_loss']:.6f}")
+    print(f"Final Loss: {summary['final_loss']:.6f}")
+    print(f"Loss Reduction: {summary['loss_reduction']:.6f} ({summary['loss_reduction_percentage']:.1f}%)")
+    print(f"Total Training Time: {summary['total_training_time']:.1f} seconds")
+    print(f"Average Epoch Time: {summary['average_epoch_time']:.1f} seconds")
+    print(f"Learning Rate: {summary['initial_lr']:.6f} → {summary['final_lr']:.6f}")
+    print("="*50)
+    print(f"Summary saved to: {summary_path}")
+    print("="*50)
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Train EEG emotion model with labeled data')
     parser.add_argument('--data_dir', type=str, default='data/training set',
@@ -343,7 +561,50 @@ def parse_args():
     parser.add_argument('--checkpoint_path', type=str, default='model_training/ckpt.pt',
                         help='Path to save the best model checkpoint')
     parser.add_argument('--onnx_path', type=str, default='model/va_regressor.onnx',
-                        help='Path to export ONNX model')
+                        help='Path to save ONNX model')
+    
+    # DFR5 Enhancement Arguments
+    parser.add_argument('--device_name', default='Standard_10_20', 
+                        help='EEG device name for adapter')
+    parser.add_argument('--loss_fn', default='MSE', choices=['MSE', 'CCC', 'mixed'], 
+                        help='Loss function to use')
+    parser.add_argument('--cv_method', default=None, choices=['LOSO', 'kfold'], 
+                        help='Cross-validation method')
+    parser.add_argument('--cv_folds', type=int, default=5, 
+                        help='Number of folds for k-fold CV')
+    parser.add_argument('--compute_phi', action='store_true', 
+                        help='Compute IIT Φ values during training')
+    parser.add_argument('--phi_method', default='mock', choices=['mock', 'IIT3.0', 'IIT4.0_light'], 
+                        help='Φ computation method')
+    parser.add_argument('--phi_max_channels', type=int, default=8, 
+                        help='Maximum channels for Φ computation')
+    parser.add_argument('--phi_config', default='configs/phi.yaml', 
+                        help='Φ configuration file path')
+    parser.add_argument('--use_batch_norm', action='store_true', 
+                        help='Use batch normalization in model')
+    parser.add_argument('--dropout_rate', type=float, default=0.0, 
+                        help='Dropout rate (0.0 to disable)')
+    parser.add_argument('--log_dir', default='runs', 
+                        help='TensorBoard log directory')
+    
+    # DFR5 Advanced Options
+    parser.add_argument('--compute_phi', action='store_true', default=False,
+                        help='Enable IIT Φ computation during training')
+    parser.add_argument('--phi_method', type=str, default='mock',
+                        choices=['mock', 'IIT3.0', 'IIT4.0_light'],
+                        help='Method for Φ computation')
+    parser.add_argument('--phi_max_channels', type=int, default=8,
+                        help='Maximum channels for Φ computation')
+    parser.add_argument('--cv_method', type=str, default=None,
+                        choices=['LOSO', 'kfold', '5-fold', '10-fold'],
+                        help='Cross-validation method')
+    parser.add_argument('--cv_folds', type=int, default=5,
+                        help='Number of folds for K-fold CV')
+    parser.add_argument('--loss_fn', type=str, default='MSE',
+                        choices=['MSE', 'CCC', 'mixed'],
+                        help='Loss function to use')
+    parser.add_argument('--loss_alpha', type=float, default=0.7,
+                        help='Alpha parameter for mixed loss (CCC weight)')
     
     return parser.parse_args()
 

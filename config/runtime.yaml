@@ -20,3 +20,4 @@ mqtt:
   topic: "eeg/va"
 
 log_level: "INFO"
+use_gpu: true                     # P0 Requirement: GPU/CPU switching

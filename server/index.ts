@@ -1,6 +1,10 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import dotenv from "dotenv";
+
+// Load environment variables from .env file
+dotenv.config();
 
 const app = express();
 app.use(express.json());
@@ -58,9 +62,12 @@ app.use((req, res, next) => {
 
   // Use port 5000 for Replit environment compatibility
   const port = process.env.PORT ? parseInt(process.env.PORT) : 5000;
+  const host = process.env.HOST || '0.0.0.0'; // Bind to all interfaces for external access
+  
   server.listen({
-    port
+    port,
+    host
   }, () => {
-    log(`serving on port ${port}`);
+    log(`serving on ${host}:${port}`);
   });
 })();

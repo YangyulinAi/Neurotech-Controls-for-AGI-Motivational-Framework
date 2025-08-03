@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Smile, Zap, Database, Clock } from 'lucide-react';
+import { Smile, Zap, Database, Clock, Home, Brain } from 'lucide-react';
+import { useLocation } from 'wouter';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
 import { MetricCard } from '@/components/metric-card';
@@ -7,10 +8,12 @@ import { VAPlane } from '@/components/va-plane';
 import { TimeSeriesChart } from '@/components/time-series-chart';
 import { StatisticsPanel } from '@/components/statistics-panel';
 import { DebugConsole } from '@/components/debug-console';
+import { TrainingProgress } from '@/components/training-progress';
 import { useWebSocket } from '@/hooks/use-websocket';
 import { useToast } from '@/hooks/use-toast';
 
 export default function Dashboard() {
+  const [, setLocation] = useLocation();
   const [refreshRate, setRefreshRate] = useState(500);
   const [timeRange, setTimeRange] = useState(60);
   const [sessionStartTime] = useState(Date.now());
@@ -20,6 +23,7 @@ export default function Dashboard() {
   
   const {
     connectionStatus,
+    dataFlowStatus,
     currentData,
     dataHistory,
     totalDataPoints,
@@ -83,9 +87,20 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen flex bg-primary-dark">
-      <Sidebar connectionStatus={connectionStatus} />
+      <Sidebar connectionStatus={connectionStatus} dataFlowStatus={dataFlowStatus} />
       
       <div className="flex-1 overflow-auto">
+        {/* Return to Home Button */}
+        <div className="p-4 border-b border-gray-700">
+          <button
+            onClick={() => setLocation('/')}
+            className="flex items-center space-x-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-colors"
+          >
+            <Home size={16} />
+            <span>Return to Home</span>
+          </button>
+        </div>
+        
         <Header
           onExport={handleExport}
           refreshRate={refreshRate}
@@ -94,7 +109,7 @@ export default function Dashboard() {
 
         <main className="p-6">
           {/* Current Metrics Row */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6 animate-fade-in">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-6 animate-fade-in">
             <MetricCard
               title="Valence"
               value={currentData?.valence.toFixed(2) || '0.00'}
@@ -115,6 +130,14 @@ export default function Dashboard() {
               showProgress
               progressValue={arousalProgress.progressValue}
               progressOffset={arousalProgress.progressOffset}
+            />
+
+            <MetricCard
+              title="Consciousness Φ"
+              value={currentData?.phi !== undefined ? currentData.phi.toFixed(4) : 'Computing'}
+              icon={<Brain size={20} />}
+              color="text-purple-400"
+              subtitle="IIT Φ Index"
             />
 
             <MetricCard
@@ -147,6 +170,11 @@ export default function Dashboard() {
               timeRange={timeRange}
               onTimeRangeChange={setTimeRange}
             />
+          </div>
+
+          {/* Training Progress */}
+          <div className="animate-slide-up mb-6">
+            <TrainingProgress />
           </div>
 
           {/* Statistics and Debug Row */}

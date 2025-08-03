@@ -1,0 +1,35 @@
+# IIT Φ 计算配置文件
+
+# 基本设置
+compute_phi: false                    # 是否启用 Φ 计算
+publish_phi: false                   # 是否在推理结果中发布 Φ 值
+
+# Φ 计算方法配置
+phi_method: "mock"                   # 计算方法: "mock", "IIT3.0", "IIT4.0_light"
+max_channels: 8                      # 最大通道数（减少计算复杂度）
+tau: 1                              # 时间延迟参数
+
+# 信号预处理
+bin_method: "median"                 # 二值化方法: "median", "threshold", "multi"
+discretization_levels: 2             # 离散化级别数
+adaptive_windowing: false           # 是否使用自适应窗口
+window_size: 100                    # 窗口大小（样本点）
+window_overlap: 0.5                 # 窗口重叠比例
+
+# 性能优化
+async_computation: false            # 是否异步计算 Φ（高级功能）
+max_computation_time: 5.0           # 最大计算时间（秒）
+cache_results: true                 # 是否缓存计算结果
+
+# 调试和日志
+debug_phi: false                    # 是否启用 Φ 计算调试信息
+log_phi_stats: true                 # 是否记录 Φ 统计信息
+save_phi_history: false            # 是否保存 Φ 历史数据
+
+# 阈值设置
+min_phi_threshold: 0.001            # 最小有效 Φ 值
+max_phi_threshold: 1.0              # 最大有效 Φ 值
+
+# 实验性功能
+enable_causal_density: false       # 启用因果密度计算（未来功能）
+enable_neural_complexity: false    # 启用神经复杂度计算（未来功能）

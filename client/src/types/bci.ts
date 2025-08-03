@@ -2,6 +2,7 @@ export interface BciDataPoint {
   valence: number;
   arousal: number;
   timestamp: number;
+  phi?: number;  // IIT Φ (Integrated Information) value
 }
 
 export interface BciStatistics {
@@ -31,4 +32,11 @@ export interface WebSocketMessage {
   message?: string;
   error?: string;
   filename?: string;
+  phi?: number;  // IIT Φ (Integrated Information) value
+  payload?: {
+    phi?: number;
+    timestamp?: number;
+    method?: string;
+    error?: string;
+  };
 }

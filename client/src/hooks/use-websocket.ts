@@ -10,6 +10,16 @@ export function useWebSocket() {
     error: null,
   });
   
+  const [dataFlowStatus, setDataFlowStatus] = useState<{
+    isReceivingData: boolean;
+    lastDataTime: Date | null;
+    analysisActive: boolean;
+  }>({
+    isReceivingData: false,
+    lastDataTime: null,
+    analysisActive: false,
+  });
+  
   const [currentData, setCurrentData] = useState<BciDataPoint | null>(null);
   const [dataHistory, setDataHistory] = useState<BciDataPoint[]>([]);
   const [totalDataPoints, setTotalDataPoints] = useState(0);
@@ -51,8 +61,31 @@ export function useWebSocket() {
         try {
           const message: WebSocketMessage = JSON.parse(event.data);
           
-          // Debug log for incoming messages
-          console.log('Received WebSocket message:', message);
+          // Enhanced debug logging for production troubleshooting
+          console.log('=== WebSocket Message Debug ===');
+          console.log('Raw event data:', event.data);
+          console.log('Parsed message:', message);
+          console.log('Message type:', message.type);
+          console.log('Message keys:', Object.keys(message));
+          console.log('Current environment:', {
+            protocol: window.location.protocol,
+            host: window.location.host,
+            pathname: window.location.pathname
+          });
+
+          // Handle connection notification
+          if (message.type === 'connection') {
+            console.log('=== WebSocket Connection Message ===');
+            console.log('Connection message:', message.message);
+            console.log('Connection timestamp:', message.timestamp);
+            console.log('Connection established successfully');
+            setConnectionStatus(prev => ({
+              ...prev,
+              lastUpdate: new Date(),
+              error: null,
+            }));
+            return;
+          }
 
           // Handle analysis completion notification
           if (message.type === 'analysis_complete') {
@@ -61,19 +94,39 @@ export function useWebSocket() {
               description: `Real data analysis finished for ${message.filename}`,
               duration: 5000,
             });
+            
+            // Update analysis status
+            setDataFlowStatus(prev => ({
+              ...prev,
+              analysisActive: false,
+            }));
             return;
           }
 
-          if (typeof message.valence === 'number' && typeof message.arousal === 'number') {
-            // Clamp values to valid range
+          // Handle training progress notification (just log, don't process as BCI data)
+          if (message.type === 'training_progress') {
+            console.log('Training progress received in main WebSocket:', message);
+            return;
+          }
+
+          // Handle different message formats from Python analysis
+          if (message.type === 'bci_data' || message.type === 'prediction' || (!message.type && typeof message.valence === 'number' && typeof message.arousal === 'number')) {
+            console.log('=== BCI Data Processing ===');
+            console.log('Raw valence:', message.valence, 'type:', typeof message.valence);
+            console.log('Raw arousal:', message.arousal, 'type:', typeof message.arousal);
+            console.log('Raw phi:', message.phi, 'type:', typeof message.phi);
+            
             const valence = Math.max(-1, Math.min(1, message.valence));
             const arousal = Math.max(-1, Math.min(1, message.arousal));
+            const phi = typeof message.phi === 'number' ? Math.max(0, message.phi) : undefined;
 
-            console.log('Processing data point:', { valence, arousal, original: { valence: message.valence, arousal: message.arousal } });
+            console.log('Processed BCI data point:', { valence, arousal, phi });
+            console.log('Data flow status before update:', dataFlowStatus);
 
             const dataPoint: BciDataPoint = {
               valence,
               arousal,
+              phi,
               timestamp: Date.now(),
             };
 
@@ -82,7 +135,6 @@ export function useWebSocket() {
 
             setDataHistory(prev => {
               const updated = [...prev, dataPoint];
-              // Keep only recent data points
               if (updated.length > maxHistorySize) {
                 return updated.slice(-maxHistorySize);
               }
@@ -94,8 +146,51 @@ export function useWebSocket() {
               lastUpdate: new Date(),
               error: null,
             }));
+            
+            setDataFlowStatus(prev => ({
+              ...prev,
+              isReceivingData: true,
+              lastDataTime: new Date(),
+              analysisActive: true,
+            }));
+            return;
+          }
+
+          // Handle phi update messages
+          if (message.type === 'phi_update' && message.payload?.phi !== undefined) {
+            console.log('Received Φ update:', message.payload);
+            setCurrentData(prev => {
+              if (prev) {
+                return {
+                  ...prev,
+                  phi: message.payload!.phi
+                };
+              }
+              return prev;
+            });
+            return;
+          }
+
+          // Handle phi error messages
+          if (message.type === 'phi_error') {
+            console.log('Φ computation error:', message.payload);
+            return;
+          }
+
+          // Fallback for other valence/arousal data formats
+          if (typeof message.valence === 'number' && typeof message.arousal === 'number') {
+            console.log('Fallback: Processing valence/arousal data via legacy format');
           } else {
-            console.log('Message does not contain valid valence/arousal data:', message);
+            console.log('=== UNHANDLED MESSAGE DEBUG ===');
+            console.log('Message format not recognized or missing valence/arousal data');
+            console.log('Full message object:', message);
+            console.log('Message type check results:', {
+              isBciData: message.type === 'bci_data',
+              isPrediction: message.type === 'prediction',
+              hasValence: typeof message.valence === 'number',
+              hasArousal: typeof message.arousal === 'number',
+              noType: !message.type
+            });
           }
         } catch (error) {
           console.error('Error parsing WebSocket message:', error, 'Raw data:', event.data);
@@ -162,6 +257,23 @@ export function useWebSocket() {
     setDataHistory([]);
   }, []);
 
+  // Check for data timeout (no data received for 30 seconds)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDataFlowStatus(prev => {
+        if (prev.lastDataTime && Date.now() - prev.lastDataTime.getTime() > 30000) {
+          return {
+            ...prev,
+            isReceivingData: false,
+          };
+        }
+        return prev;
+      });
+    }, 5000); // Check every 5 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     connect();
     
@@ -172,6 +284,7 @@ export function useWebSocket() {
 
   return {
     connectionStatus,
+    dataFlowStatus,
     currentData,
     dataHistory,
     totalDataPoints,

@@ -5,6 +5,7 @@ import time
 import numpy as np
 import threading
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
 #logging.basicConfig(
 #    format="%(asctime)s %(levelname)s %(name)s │ %(message)s",
@@ -19,6 +20,51 @@ from .onnx_runner import ONNXRunner
 from .websocket_server import WebSocketServer
 from .mqtt_publisher import MQTTPublisher
 from .api_rest import update_last
+
+# P0 Requirement: Initialize ThreadPoolExecutor for async Φ computation
+phi_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="phi_compute")
+
+def calc_phi_and_send(eeg_chunk, timestamp, websocket_server, logger):
+    """
+    P0 Requirement: Async Φ computation and broadcasting
+    Calculate Φ in background thread and send update via WebSocket
+    """
+    try:
+        # Import here to avoid circular imports
+        from .phi_estimator import PhiEstimator
+        
+        # Initialize Φ estimator with fast method for real-time
+        phi_estimator = PhiEstimator(method='mock')  # Use mock for performance
+        
+        # Compute Φ on limited channels for performance
+        phi_value = phi_estimator.estimate_phi(eeg_chunk[:8])  # First 8 channels
+        
+        # Prepare Φ update message
+        phi_update = {
+            'type': 'phi_update',
+            'payload': {
+                'timestamp': timestamp,
+                'phi': float(phi_value),
+                'method': 'mock'
+            }
+        }
+        
+        # Send async update via WebSocket
+        asyncio.create_task(websocket_server.broadcast(phi_update))
+        logger.debug(f"Φ computed and sent: {phi_value:.4f}")
+        
+    except Exception as e:
+        logger.error(f"Φ computation failed: {e}")
+        # Send error notification
+        error_update = {
+            'type': 'phi_error',
+            'payload': {
+                'timestamp': timestamp,
+                'phi': 0.0,
+                'error': str(e)
+            }
+        }
+        asyncio.create_task(websocket_server.broadcast(error_update))
 
 async def infer_loop(cfg, logger):
     """
@@ -35,7 +81,8 @@ async def infer_loop(cfg, logger):
     threading.Thread(target=lsl.start, daemon=True).start()
 
     pre = Preprocessor(cfg['sampling_rate'], cfg['bandpass']['low'], cfg['bandpass']['high'])
-    runner = ONNXRunner(cfg['model_path'])
+    # P0 Requirement: GPU/CPU auto-switching
+    runner = ONNXRunner(cfg['model_path'], use_gpu=cfg.get('use_gpu', True))
     ws = WebSocketServer(cfg['websocket']['host'], cfg['websocket']['port'], logger)
     mqtt = MQTTPublisher(cfg['mqtt']['broker'], cfg['mqtt']['port'], cfg['mqtt']['topic'], logger)
 
@@ -58,34 +105,38 @@ async def infer_loop(cfg, logger):
         de_vec = de_vec[np.newaxis, :]  # shape: (1, 26)
         # 4) Perform model inference
         out = runner.predict(spec3, de_vec)[0]
+        current_timestamp = time.time()
 
-        # Print predictions to console
-        logger.info(f"Predicted VA → valence={out[0]:.3f}, arousal={out[1]:.3f}")
+        # P0 Requirement: Print predictions with Φ computing message
+        logger.info(f"Predicted VA → valence={out[0]:.3f}, arousal={out[1]:.3f}, Φ=computing...")
 
-        # 5) Prepare result JSON for internal use
+        # P0 Requirement: Prepare result JSON with Φ field
         result = {
-            'ts': time.time(),
+            'ts': current_timestamp,
             'valence': float(out[0]),
             'arousal': float(out[1]),
+            'phi': 0.0,  # Placeholder - updated by async computation
             'version': cfg['version']
         }
 
-        # 6) Prepare data for frontend (different format)
+        # P0 Requirement: Prepare frontend data with Φ field  
         frontend_data = {
             'type': 'bci_data',
             'payload': {
                 'valence': float(out[0]),
                 'arousal': float(out[1]),
+                'phi': 0.0,  # Placeholder
                 'sessionId': 'live_session'
             }
         }
 
-        # 7) Broadcast and publish
+        # P0 Requirement: Submit async Φ computation
+        phi_executor.submit(calc_phi_and_send, filtered.T, current_timestamp, ws, logger)
+
+        # 7) Broadcast and publish with Φ field
         update_last(result)
-        # 发送到你自己的WebSocket客户端（如果有）
         await ws.broadcast(result)
-        # 发送到前端仪表板
-        await ws.send_to_frontend(result)
+        await ws.send_to_frontend(frontend_data)
         mqtt.publish(result)
         # Wait until the next step
         await asyncio.sleep(cfg['step_size'])
@@ -97,6 +148,5 @@ if __name__ == '__main__':
     with open('config/runtime.yaml') as f:
         cfg = yaml.safe_load(f)
     cfg['n_channels'] = 62
-    cfg['version'] = 'va-regressor@1.3.0'
-    # Run the asynchronous inference loop
+    # Run the inference loop
     asyncio.run(infer_loop(cfg, logger))

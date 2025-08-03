@@ -3,13 +3,28 @@ import onnxruntime as ort
 import numpy as np
 
 class ONNXRunner:
-    def __init__(self, model_path):
+    def __init__(self, model_path, use_gpu=True):
         """
-        Initialize ONNX Runtime session with CPU provider.
+        Initialize ONNX Runtime session with GPU/CPU auto-switching.
         Automatically discover all model inputs
         """
-        # Create inference session using CPU provider
-        self.session = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
+        # P0 Requirement: GPU/CPU auto-switching
+        available_providers = ort.get_available_providers()
+        providers = []
+        
+        if use_gpu and "CUDAExecutionProvider" in available_providers:
+            providers.append("CUDAExecutionProvider")
+            print(f"✓ Using GPU acceleration (CUDA)")
+        elif use_gpu and "OpenVINOExecutionProvider" in available_providers:
+            providers.append("OpenVINOExecutionProvider")
+            print(f"✓ Using OpenVINO acceleration")
+        
+        providers.append("CPUExecutionProvider")
+        
+        # Create inference session with auto-selected providers
+        self.session = ort.InferenceSession(model_path, providers=providers)
+        print(f"ONNX providers: {[p.split('ExecutionProvider')[0] for p in providers]}")
+        
         # Collect all input names, preserving the order defined in the ONNX model
         inputs = self.session.get_inputs()
         self.input_names = [inp.name for inp in inputs]

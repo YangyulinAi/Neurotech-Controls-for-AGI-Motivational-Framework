@@ -1,0 +1,20 @@
+Download the React DevTools for a better development experience: https://reactjs.org/link/react-devtools
+home.tsx:101 === Starting Analysis Debug ===
+home.tsx:102 Selected file: set/s2/s2_3.set
+home.tsx:103 Environment: Objecthost: "agi.deeps.net.cn"pathname: "/"protocol: "https:"[[Prototype]]: Object
+home.tsx:116 Sending analysis request: ObjectcomputePhi: truefilename: "set/s2/s2_3.set"phiMethod: "mock"[[Prototype]]: Objectconstructor: ƒ Object()hasOwnProperty: ƒ hasOwnProperty()isPrototypeOf: ƒ isPrototypeOf()propertyIsEnumerable: ƒ propertyIsEnumerable()toLocaleString: ƒ toLocaleString()toString: ƒ toString()valueOf: ƒ valueOf()__defineGetter__: ƒ __defineGetter__()__defineSetter__: ƒ __defineSetter__()__lookupGetter__: ƒ __lookupGetter__()__lookupSetter__: ƒ __lookupSetter__()__proto__: (...)get __proto__: ƒ __proto__()set __proto__: ƒ __proto__()
+home.tsx:126 Analysis response status: 200
+home.tsx:127 Analysis response headers: Objectcontent-length: "168"content-security-policy: "default-src 'self' http: https: data: blob: 'unsafe-inline'; frame-ancestors 'self';"content-type: "application/json; charset=utf-8"date: "Sun, 03 Aug 2025 12:02:37 GMT"etag: "W/\"a8-UGwsmjKwELvk4a02UI18RTlL044\""referrer-policy: "no-referrer-when-downgrade"server: "nginx/1.18.0 (Ubuntu)"x-content-type-options: "nosniff"x-frame-options: "SAMEORIGIN"x-powered-by: "Express"x-xss-protection: "1; mode=block"[[Prototype]]: Object
+home.tsx:131 Analysis response data: Object
+training-progress.tsx:35 Training progress WebSocket connected to wss://agi.deeps.net.cn/ws
+training-progress.tsx:41 Training progress component received data: Object
+use-websocket.ts:65 === WebSocket Message Debug ===
+use-websocket.ts:66 Raw event data: {"type":"connection","message":"Connected to BCI data stream","timestamp":"2025-08-03T12:02:39.668Z"}
+use-websocket.ts:67 Parsed message: Objectmessage: "Connected to BCI data stream"timestamp: "2025-08-03T12:02:39.668Z"type: "connection"[[Prototype]]: Object
+use-websocket.ts:68 Message type: connection
+use-websocket.ts:69 Message keys: Array(3)0: "type"1: "message"2: "timestamp"length: 3[[Prototype]]: Array(0)
+use-websocket.ts:70 Current environment: Objecthost: "agi.deeps.net.cn"pathname: "/dashboard"protocol: "https:"[[Prototype]]: Object
+use-websocket.ts:78 === WebSocket Connection Message ===
+use-websocket.ts:79 Connection message: Connected to BCI data stream
+use-websocket.ts:80 Connection timestamp: 2025-08-03T12:02:39.668Z
+use-websocket.ts:81 Connection established successfully

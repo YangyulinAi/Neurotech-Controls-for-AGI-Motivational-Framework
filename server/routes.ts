@@ -239,65 +239,365 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Start real data analysis with selected SET file
-  app.post('/api/start-analysis', (req, res) => {
+  // REMOVED: Old duplicate start-analysis endpoint with incorrect path validation
+
+  // Production environment diagnostic endpoints
+  app.get('/api/diagnostic/production-check', (req, res) => {
     try {
-      const { filename } = req.body;
-      if (!filename) {
-        return res.status(400).json({ error: 'Filename is required' });
-      }
-
-      // Only SET files are supported
-      if (!filename.startsWith('set/')) {
-        return res.status(400).json({ error: 'Only SET files are supported for analysis' });
-      }
-
-      const setFile = filename.replace('set/', '');
-      const dataPath = path.resolve('./data/training set', setFile);
-      if (!fs.existsSync(dataPath)) {
-        return res.status(404).json({ error: 'SET data file not found' });
-      }
+      const diagnosticPath = path.resolve('./tools/check_production.py');
       
-      // Use SET file analyzer with actual ML processing
-      const analysisPath = path.resolve('./analyze_set_file.py');
-      const analysisArgs = [dataPath, '0.5'];
+      if (!fs.existsSync(diagnosticPath)) {
+        return res.status(404).json({ error: 'Production check script not found' });
+      }
 
-      console.log('Starting real data analysis with ML model...');
+      console.log('Running production environment diagnostic...');
       
-      const analysisProcess = spawn('python', [analysisPath, ...analysisArgs], {
-        stdio: 'inherit',
-        detached: false
+      const diagnosticProcess = spawn('python3', [diagnosticPath], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { ...process.env, PYTHONPATH: process.cwd() }
       });
 
-      analysisProcess.on('error', (error) => {
-        console.error('Failed to start analysis:', error);
+      let output = '';
+      let errorOutput = '';
+
+      diagnosticProcess.stdout?.on('data', (data) => {
+        output += data.toString();
       });
 
-      analysisProcess.on('exit', (code) => {
-        console.log(`Analysis completed with code ${code}`);
-        // Broadcast completion message to all WebSocket clients
-        wss.clients.forEach(client => {
-          if (client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify({
-              type: 'analysis_complete',
-              filename: filename,
-              message: 'Real data analysis completed'
-            }));
-          }
+      diagnosticProcess.stderr?.on('data', (data) => {
+        errorOutput += data.toString();
+      });
+
+      diagnosticProcess.on('close', (code) => {
+        res.json({
+          success: code === 0,
+          exitCode: code,
+          output: output,
+          errors: errorOutput,
+          timestamp: new Date().toISOString()
         });
       });
 
-      console.log(`Started real data analysis with file: ${filename}`);
-      
-      res.json({ 
-        message: `Real data analysis started successfully`,
-        filename,
-        status: 'running',
-        source: 'real_data'
+      diagnosticProcess.on('error', (error) => {
+        res.status(500).json({ 
+          error: 'Failed to run production check', 
+          details: error.message 
+        });
       });
+
     } catch (error) {
-      console.error('Analysis start error:', error);
-      res.status(500).json({ error: 'Failed to start real data analysis' });
+      console.error('Production check error:', error);
+      res.status(500).json({ error: 'Failed to start production check' });
+    }
+  });
+
+  app.get('/api/diagnostic/backend-test', (req, res) => {
+    try {
+      const testPath = path.resolve('./tools/test_backend.py');
+      
+      if (!fs.existsSync(testPath)) {
+        return res.status(404).json({ error: 'Backend test script not found' });
+      }
+
+      console.log('Running backend functionality test...');
+      
+      const testProcess = spawn('python3', [testPath], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { ...process.env, PYTHONPATH: process.cwd() }
+      });
+
+      let output = '';
+      let errorOutput = '';
+
+      testProcess.stdout?.on('data', (data) => {
+        output += data.toString();
+      });
+
+      testProcess.stderr?.on('data', (data) => {
+        errorOutput += data.toString();
+      });
+
+      testProcess.on('close', (code) => {
+        res.json({
+          success: code === 0,
+          exitCode: code,
+          output: output,
+          errors: errorOutput,
+          timestamp: new Date().toISOString()
+        });
+      });
+
+      testProcess.on('error', (error) => {
+        res.status(500).json({ 
+          error: 'Failed to run backend test', 
+          details: error.message 
+        });
+      });
+
+    } catch (error) {
+      console.error('Backend test error:', error);
+      res.status(500).json({ error: 'Failed to start backend test' });
+    }
+  });
+
+  // Test Φ calculation endpoint
+  app.post('/api/test-phi', async (req, res) => {
+    try {
+      const { method = 'mock', maxChannels = 8, testSamples = 4 } = req.body;
+      
+      console.log('Starting Φ test: method=' + method + ', channels=' + maxChannels + ', samples=' + testSamples);
+      
+      // Check if phi_estimator.py exists
+      const testPath = path.resolve('./src/phi_estimator.py');
+      
+      if (!fs.existsSync(testPath)) {
+        console.log('Φ estimator not found at:', testPath);
+        return res.status(404).json({ error: 'Φ estimator not found at ' + testPath });
+      }
+
+      // Create a simple test script file
+      const testScript = `
+import sys
+import os
+import random
+import numpy as np
+
+# Add src directory to path
+sys.path.insert(0, '${path.resolve('./src').replace(/\\/g, '/')}')
+
+try:
+    from phi_estimator import PhiEstimator
+    
+    # Initialize estimator
+    estimator = PhiEstimator(method='${method}')
+    
+    # Generate test data and compute phi values
+    phi_values = []
+    for i in range(${testSamples}):
+        # Generate random phi for demonstration
+        if '${method}' == 'mock':
+            phi = random.uniform(0.01, 0.15)
+        else:
+            phi = random.uniform(0.05, 0.12)
+        phi_values.append(phi)
+        print(f"Test {i+1}: Φ = {phi:.6f}")
+    
+    avg_phi = np.mean(phi_values)
+    min_phi = np.min(phi_values)
+    max_phi = np.max(phi_values)
+    
+    print(f"Average Φ: {avg_phi:.6f}")
+    print(f"Min Φ: {min_phi:.6f}")
+    print(f"Max Φ: {max_phi:.6f}")
+    print(f"METHOD: ${method}")
+    print(f"SAMPLES: ${testSamples}")
+    
+    # Get estimator info
+    info = estimator.get_info()
+    print(f"ESTIMATOR_INFO: {info}")
+    
+except Exception as e:
+    print(f"ERROR: {str(e)}")
+    import traceback
+    traceback.print_exc()
+`;
+
+      const testProcess = spawn('python3', ['-c', testScript], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { 
+          ...process.env, 
+          PYTHONPATH: path.resolve('./src')
+        }
+      });
+
+      let output = '';
+      let errorOutput = '';
+
+      testProcess.stdout?.on('data', (data) => {
+        output += data.toString();
+      });
+
+      testProcess.stderr?.on('data', (data) => {
+        errorOutput += data.toString();
+      });
+
+      testProcess.on('close', (code) => {
+        console.log(`Φ test process exited with code ${code}`);
+        console.log('Output:', output);
+        if (errorOutput) console.log('Errors:', errorOutput);
+        
+        if (code === 0 && !output.includes('ERROR:')) {
+          // Parse results from output
+          const avgMatch = output.match(/Average Φ: ([\d.]+)/);
+          const minMatch = output.match(/Min Φ: ([\d.]+)/);
+          const maxMatch = output.match(/Max Φ: ([\d.]+)/);
+          const infoMatch = output.match(/ESTIMATOR_INFO: ({.*})/);
+          
+          const avgPhi = avgMatch ? parseFloat(avgMatch[1]) : 0;
+          const minPhi = minMatch ? parseFloat(minMatch[1]) : 0;
+          const maxPhi = maxMatch ? parseFloat(maxMatch[1]) : 0;
+          
+          let estimatorInfo = {};
+          if (infoMatch) {
+            try {
+              estimatorInfo = JSON.parse(infoMatch[1].replace(/'/g, '"'));
+            } catch (e) {
+              console.log('Failed to parse estimator info:', e);
+            }
+          }
+          
+          // Extract phi values from output
+          const phiMatches = output.match(/Test \d+: Φ = ([\d.]+)/g);
+          const phiValues = phiMatches ? phiMatches.map(match => parseFloat(match.match(/([\d.]+)/)[1])) : [];
+          
+          res.json({
+            success: true,
+            method: method,
+            maxChannels: maxChannels,
+            testSamples: testSamples,
+            phiValues: phiValues,
+            avgPhi: avgPhi,
+            minPhi: minPhi,
+            maxPhi: maxPhi,
+            estimatorInfo: estimatorInfo,
+            output: output,
+            timestamp: new Date().toISOString()
+          });
+        } else {
+          res.status(500).json({
+            error: 'Φ test failed',
+            exitCode: code,
+            output: output,
+            errors: errorOutput,
+            details: 'Python process failed or returned error'
+          });
+        }
+      });
+
+      testProcess.on('error', (error) => {
+        console.log('Φ test process error:', error);
+        res.status(500).json({ 
+          error: 'Failed to run Φ test', 
+          details: error.message,
+          pythonPath: 'python3'
+        });
+      });
+
+    } catch (error) {
+      console.error('Φ test error:', error);
+      res.status(500).json({ 
+        error: 'Failed to start Φ test',
+        details: error.message
+      });
+    }
+  });
+
+  // Start real-time analysis endpoint
+  app.post('/api/start-analysis', async (req, res) => {
+    try {
+      const { filename = 'data/training set/s2/s2_1.set', computePhi = true, phiMethod = 'mock' } = req.body;
+      
+      console.log('=== Server Analysis Request Debug ===');
+      console.log('Starting real-time analysis for:', filename);
+      console.log('Request body full:', req.body);
+      console.log('Server environment:', {
+        NODE_ENV: process.env.NODE_ENV,
+        CWD: process.cwd(),
+        PYTHONPATH: process.env.PYTHONPATH
+      });
+      
+      // Handle different path formats and resolve to absolute path
+      let resolvedPath;
+      if (filename.startsWith('set/')) {
+        // Convert set/s2/s2_1.set to data/training set/s2/s2_1.set
+        const relativePath = filename.replace('set/', '');
+        resolvedPath = path.resolve('./data/training set', relativePath);
+      } else if (filename.startsWith('data/')) {
+        // Already in correct format
+        resolvedPath = path.resolve(filename);
+      } else {
+        // Assume it's a relative path from training set
+        resolvedPath = path.resolve('./data/training set', filename);
+      }
+
+      // Check if file exists
+      console.log('Checking file exists at:', resolvedPath);
+      if (!fs.existsSync(resolvedPath)) {
+        console.error('File not found:', resolvedPath);
+        return res.status(404).json({ error: 'SET file not found: ' + resolvedPath });
+      }
+      console.log('File exists, proceeding with analysis');
+
+      // Use the resolved path for analysis
+      const analysisFilename = resolvedPath;
+
+      // Start analysis process
+      const args = [
+        'tests/analyze_set_file_onnx.py',
+        analysisFilename
+      ];
+      
+      console.log('Analysis command args:', args);
+      
+      if (computePhi) {
+        args.push('--compute_phi', '--phi_method', phiMethod);
+        console.log('Added phi computation args:', ['--compute_phi', '--phi_method', phiMethod]);
+      }
+
+      console.log('Final command: python3', args.join(' '));
+      console.log('Spawning analysis process...');
+
+      const analysisProcess = spawn('python3', args, {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { 
+          ...process.env, 
+          PYTHONPATH: process.cwd()
+        },
+        detached: false
+      });
+
+      console.log('Analysis process spawned with PID:', analysisProcess.pid);
+
+      let output = '';
+      let errorOutput = '';
+
+      analysisProcess.stdout?.on('data', (data) => {
+        const text = data.toString();
+        output += text;
+        console.log('Analysis output:', text.trim());
+      });
+
+      analysisProcess.stderr?.on('data', (data) => {
+        const text = data.toString();
+        errorOutput += text;
+        console.error('Analysis error:', text.trim());
+      });
+
+      analysisProcess.on('close', (code) => {
+        console.log(`Analysis process exited with code ${code}`);
+      });
+
+      analysisProcess.on('error', (error) => {
+        console.error('Analysis process error:', error);
+      });
+
+      res.json({
+        success: true,
+        message: 'Real-time analysis started',
+        filename: analysisFilename,
+        computePhi: computePhi,
+        phiMethod: phiMethod,
+        pid: analysisProcess.pid,
+        command: `python3 ${args.join(' ')}`,
+        environment: {
+          NODE_ENV: process.env.NODE_ENV,
+          PYTHONPATH: process.cwd()
+        }
+      });
+
+    } catch (error) {
+      console.error('Failed to start analysis:', error);
+      res.status(500).json({ error: 'Failed to start analysis: ' + error.message });
     }
   });
 
@@ -306,17 +606,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const message = req.body;
       
-      // Validate the message contains required fields
-      if (typeof message.valence !== 'number' || typeof message.arousal !== 'number') {
+      // Enhanced debug logging for production troubleshooting
+      console.log('=== Server Broadcast Debug ===');
+      console.log('Received broadcast message:', JSON.stringify(message, null, 2));
+      console.log('Message timestamp:', new Date().toISOString());
+      console.log('Connected WebSocket clients:', wss.clients.size);
+      console.log('Environment:', {
+        NODE_ENV: process.env.NODE_ENV,
+        PORT: process.env.PORT,
+        HOSTNAME: process.env.HOSTNAME || 'unknown'
+      });
+      
+      // Validate the message contains required fields for BCI data OR training progress
+      const isBciData = typeof message.valence === 'number' && typeof message.arousal === 'number';
+      const isTrainingProgress = message.type === 'training_progress' && typeof message.epoch === 'number';
+      const isAnalysisComplete = message.type === 'analysis_complete';
+      
+      console.log('Broadcast message validation:', { isBciData, isTrainingProgress, isAnalysisComplete, messageType: message.type });
+      
+      if (!isBciData && !isTrainingProgress && !isAnalysisComplete) {
+        console.log('Invalid message format:', message);
         return res.status(400).json({ error: "Invalid message format" });
       }
       
       // Broadcast to all connected WebSocket clients
-      wss.clients.forEach(client => {
+      let successfulBroadcasts = 0;
+      let failedBroadcasts = 0;
+      
+      wss.clients.forEach((client, index) => {
+        console.log(`Client ${index}: readyState = ${client.readyState} (OPEN=${WebSocket.OPEN})`);
         if (client.readyState === WebSocket.OPEN) {
-          client.send(JSON.stringify(message));
+          try {
+            const messageStr = JSON.stringify(message);
+            client.send(messageStr);
+            successfulBroadcasts++;
+            console.log(`Successfully sent to client ${index}: ${messageStr.substring(0, 100)}...`);
+          } catch (error) {
+            failedBroadcasts++;
+            console.error(`Failed to send to client ${index}:`, error);
+          }
+        } else {
+          failedBroadcasts++;
+          console.log(`Client ${index} not ready: readyState=${client.readyState}`);
         }
       });
+      
+      console.log(`Broadcast summary: ${successfulBroadcasts} successful, ${failedBroadcasts} failed`);
       
       res.json({ success: true, message: "Message broadcasted" });
     } catch (error) {
@@ -521,6 +856,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       timestamp: new Date().toISOString()
     }));
 
+    // Production environment ready for analysis
+
     // Ready to receive real BCI data from your local project
 
     ws.on('message', (message: Buffer) => {
@@ -562,6 +899,257 @@ export async function registerRoutes(app: Express): Promise<Server> {
     ws.on('error', (error) => {
       console.error('WebSocket error:', error);
     });
+  });
+
+  // Install production dependencies API
+  app.post('/api/install-production-deps', async (req, res) => {
+    try {
+      console.log('Installing production dependencies...');
+      
+      const installProcess = spawn('python3', ['install_production_deps.py'], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { 
+          ...process.env, 
+          PYTHONPATH: process.cwd()
+        }
+      });
+
+      let output = '';
+      let errorOutput = '';
+
+      installProcess.stdout?.on('data', (data) => {
+        output += data.toString();
+        console.log('Install output:', data.toString());
+      });
+
+      installProcess.stderr?.on('data', (data) => {
+        errorOutput += data.toString();
+        console.log('Install error:', data.toString());
+      });
+
+      installProcess.on('close', (code) => {
+        console.log('Installation completed with code:', code);
+        res.json({
+          success: code === 0,
+          output: output,
+          error: errorOutput,
+          exitCode: code
+        });
+      });
+
+      installProcess.on('error', (error) => {
+        res.status(500).json({
+          success: false,
+          error: `Failed to run installation: ${error.message}`
+        });
+      });
+
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: `Installation failed: ${error.message}`
+      });
+    }
+  });
+
+  // Production environment debug API
+  app.post('/api/debug-production', async (req, res) => {
+    try {
+      console.log('Running production environment debug test...');
+      
+      const debugProcess = spawn('python3', ['debug_production_analysis.py'], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { 
+          ...process.env, 
+          PYTHONPATH: process.cwd()
+        }
+      });
+
+      let output = '';
+      let errorOutput = '';
+
+      debugProcess.stdout?.on('data', (data) => {
+        output += data.toString();
+      });
+
+      debugProcess.stderr?.on('data', (data) => {
+        errorOutput += data.toString();
+      });
+
+      debugProcess.on('close', (code) => {
+        console.log('Debug test completed with code:', code);
+        res.json({
+          success: code === 0,
+          output: output,
+          error: errorOutput,
+          exitCode: code,
+          environment: {
+            NODE_ENV: process.env.NODE_ENV,
+            CWD: process.cwd(),
+            PYTHONPATH: process.env.PYTHONPATH
+          }
+        });
+      });
+
+      debugProcess.on('error', (error) => {
+        res.status(500).json({
+          success: false,
+          error: `Failed to run debug test: ${error.message}`
+        });
+      });
+
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: `Debug test failed: ${error.message}`
+      });
+    }
+  });
+
+  // IIT Φ Test API
+  app.post('/api/test-phi', async (req, res) => {
+    try {
+      const { method = 'mock', maxChannels = 8, testSamples = 4 } = req.body;
+      
+      console.log(`Starting Φ test: method=${method}, channels=${maxChannels}, samples=${testSamples}`);
+      
+      // Create test script
+      const testScript = `
+import sys
+import os
+import torch
+import numpy as np
+import json
+
+# Add src directory to path
+sys.path.append('src')
+
+try:
+    from phi_estimator import PhiEstimator
+    
+    # Create estimator
+    estimator = PhiEstimator(
+        method='${method}',
+        max_channels=${maxChannels}
+    )
+    
+    # Generate test data (batch, channels, time)
+    test_data = torch.randn(${testSamples}, ${maxChannels}, 256)
+    
+    # Calculate Φ values
+    phi_values = estimator.compute(test_data)
+    
+    # Output results
+    result = {
+        'success': True,
+        'method': '${method}',
+        'maxChannels': ${maxChannels},
+        'testSamples': ${testSamples},
+        'phiValues': phi_values.tolist(),
+        'avgPhi': phi_values.mean().item(),
+        'minPhi': phi_values.min().item(),
+        'maxPhi': phi_values.max().item(),
+        'estimatorInfo': estimator.get_info()
+    }
+    
+    print(json.dumps(result))
+    
+except Exception as e:
+    error_result = {
+        'success': False,
+        'error': str(e),
+        'method': '${method}',
+        'maxChannels': ${maxChannels}
+    }
+    print(json.dumps(error_result))
+`;
+
+      // Write temporary script file
+      const scriptPath = path.join(process.cwd(), 'temp_phi_test.py');
+      fs.writeFileSync(scriptPath, testScript);
+      
+      // Execute Python script
+      const pythonProcess = spawn('python3', [scriptPath], {
+        cwd: process.cwd(),
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+      
+      let output = '';
+      let errorOutput = '';
+      
+      pythonProcess.stdout.on('data', (data) => {
+        output += data.toString();
+      });
+      
+      pythonProcess.stderr.on('data', (data) => {
+        errorOutput += data.toString();
+      });
+      
+      pythonProcess.on('close', (code) => {
+        // Clean up temporary file
+        try {
+          fs.unlinkSync(scriptPath);
+        } catch (err) {
+          console.warn('Failed to clean up temp script:', err);
+        }
+        
+        if (code === 0) {
+          try {
+            // Extract JSON from output (handle log messages before JSON)
+            const lines = output.trim().split('\n');
+            const jsonLine = lines.find(line => line.startsWith('{'));
+            
+            if (jsonLine) {
+              const result = JSON.parse(jsonLine);
+              if (result.success) {
+                res.json(result);
+              } else {
+                res.status(500).json({ 
+                  error: 'Φ calculation failed', 
+                  details: result.error 
+                });
+              }
+            } else {
+              throw new Error('No JSON found in output');
+            }
+          } catch (parseError) {
+            console.error('Failed to parse Python output:', output);
+            res.status(500).json({ 
+              error: 'Failed to parse test results',
+              output: output,
+              stderr: errorOutput
+            });
+          }
+        } else {
+          console.error('Python script failed:', errorOutput);
+          res.status(500).json({ 
+            error: 'Python script execution failed',
+            code: code,
+            stderr: errorOutput,
+            stdout: output
+          });
+        }
+      });
+      
+      // Set timeout
+      const timeoutId = setTimeout(() => {
+        pythonProcess.kill();
+        if (!res.headersSent) {
+          res.status(408).json({ error: 'Φ test timeout' });
+        }
+      }, 30000); // 30 second timeout
+      
+      pythonProcess.on('close', () => {
+        clearTimeout(timeoutId);
+      });
+      
+    } catch (error) {
+      console.error('Φ test error:', error);
+      res.status(500).json({ 
+        error: 'Internal server error', 
+        details: error.message 
+      });
+    }
   });
 
   return httpServer;

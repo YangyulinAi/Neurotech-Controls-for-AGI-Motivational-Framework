@@ -29,7 +29,7 @@ export function MetricCard({
           <h3 className="text-sm font-medium text-secondary-light">{title}</h3>
           <div className={`${color}`}>{icon}</div>
         </div>
-        <div className="text-3xl font-bold font-mono metric-value text-primary-light">
+        <div className="text-2xl font-bold font-mono metric-value text-primary-light break-words">
           {value}
         </div>
         {subtitle && (
