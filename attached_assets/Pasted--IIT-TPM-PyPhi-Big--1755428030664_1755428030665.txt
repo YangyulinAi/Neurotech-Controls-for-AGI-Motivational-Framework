@@ -1,0 +1,115 @@
+下面给你一段最小可运行的“真 Φ（IIT）”示例代码：
+它会把多通道时间序列 → 二值化 → 估计 TPM → 用 PyPhi 计算系统级 Big-Φ。你可以直接把这段塞进你项目的分析脚本（或单独跑一个 .py）验证。
+
+依赖：pip install pyphi numpy scipy
+建议节点数控制在 4–7，窗长 2–5s（示例里我用 5 个“节点”做演示）。
+
+# -*- coding: utf-8 -*-
+"""
+最小示例：从多通道时间序列估计 TPM，并用 PyPhi 计算“真 Φ（Big-Φ）”
+Author: Allen（示例整理）
+"""
+
+import numpy as np
+from scipy.stats import zscore
+
+# ========== 1) 一些工具函数：状态编码 / 解码 ==========
+def state_to_index(state_bits):
+    """把 0/1 的状态向量（如 [1,0,1]）编码成整数（如 5）"""
+    idx = 0
+    for b in state_bits:
+        idx = (idx << 1) | int(b)
+    return idx
+
+def index_to_state(idx, n):
+    """把整数 idx 解码回 n 位的 0/1 状态向量"""
+    return [(idx >> (n - 1 - i)) & 1 for i in range(n)]
+
+# ========== 2) 离散化：连续信号 -> 二值状态 ==========
+def binarize_timeseries(X, method="zscore>0"):
+    """
+    X: ndarray, shape [T, n_nodes] 连续信号
+    返回：states (int 型 0/1)，shape [T, n_nodes]
+    """
+    if method == "zscore>0":
+        Z = zscore(X, axis=0, ddof=1)
+        return (Z > 0).astype(int)
+    elif method == "median":
+        thr = np.median(X, axis=0, keepdims=True)
+        return (X > thr).astype(int)
+    else:
+        raise ValueError("未知离散化方法")
+
+# ========== 3) 估计 TPM（lag=1，带 Laplace 平滑）==========
+def estimate_tpm(states_2d):
+    """
+    states_2d: [T, n], 每一行是某时刻的系统状态（0/1）
+    返回：TPM, shape [2**n, n, 2]  —— PyPhi 需要的形状
+    """
+    T, n = states_2d.shape
+    S = 2 ** n
+    counts = np.ones((S, n, 2), dtype=float)  # Laplace 平滑：+1 避免 0 概率
+
+    for t in range(T - 1):
+        s_now = state_to_index(states_2d[t])
+        s_next_vec = states_2d[t + 1]
+        for i in range(n):
+            counts[s_now, i, s_next_vec[i]] += 1.0
+
+    tpm = counts / counts.sum(axis=2, keepdims=True)  # 归一化为条件概率
+    return tpm
+
+# ========== 4) 用 PyPhi 计算 Big-Φ ==========
+def compute_big_phi_from_timeseries(X, cm=None, discretize="zscore>0"):
+    """
+    X: 连续时间序列 [T, n]  —— 例如 EEG 的某 5 个通道/特征的片段
+    cm: 连接矩阵 [n, n]（0/1），None 表示默认全连（去掉自环）
+    返回：phi_value (float)
+    """
+    states = binarize_timeseries(X, method=discretize)
+    tpm = estimate_tpm(states)
+    n = states.shape[1]
+
+    if cm is None:
+        cm = np.ones((n, n), dtype=int) - np.eye(n, dtype=int)  # 全连但无自环
+
+    import pyphi
+    # 可选：保守一些的计算配置（按需开启）
+    # pyphi.config.PROGRESS_BARS = False
+    # pyphi.config.PARTITION_CONFIG = 'all'  # 默认即可
+    # pyphi.config.ASSUME_STATIONARY_STATE_DISTRIBUTION = True
+
+    net = pyphi.Network(tpm, cm)  # node_labels 可选
+    current_state = tuple(int(x) for x in states[-1].tolist())  # 取最后一帧的系统状态
+    subsystem = pyphi.Subsystem(net, current_state)
+
+    # 系统级的 Big-Φ（IIT 3.x）
+    phi_value = pyphi.compute.big_phi(subsystem)
+    return float(phi_value)
+
+# ========== 5) 演示（合成数据）==========
+if __name__ == "__main__":
+    np.random.seed(42)
+    T = 2000
+    n = 5
+
+    # 生成一个“有互相影响”的简易多通道信号（随便造点相关性用于演示）
+    base = np.random.randn(T, 1)
+    X = np.zeros((T, n))
+    X[:, 0] = base[:, 0] + 0.5 * np.random.randn(T)
+    X[:, 1] = 0.7 * np.roll(X[:, 0], 1) + 0.3 * np.random.randn(T)     # 受 0 的影响
+    X[:, 2] = 0.6 * np.roll(X[:, 1], 1) + 0.4 * np.random.randn(T)     # 受 1 的影响
+    X[:, 3] = 0.5 * np.roll(X[:, 0], 1) + 0.5 * np.roll(X[:, 2], 1)    # 混合影响
+    X[:, 4] = 0.5 * np.roll(X[:, 3], 1) + 0.5 * np.random.randn(T)     # 受 3 的影响
+
+    # 计算“真 Φ”（Big-Φ）
+    phi = compute_big_phi_from_timeseries(X, cm=None, discretize="zscore>0")
+    print(f"Big-Φ (IIT, 真 Φ) = {phi:.6f}")
+
+怎么用到你的项目里
+
+在你的 tests/analyze_file_onnx.py（或后端分析模块）里，加一个分支：当 --compute_phi 且 phi_method 选 IIT3.0/IIT4.0_light 时，取少量通道/特征（如 5 个枕叶通道）组成 X=[T,n]，调用上面的 compute_big_phi_from_timeseries(X)。
+
+实时模式：每 2–5 秒做一次滑窗，更新 Φ；超时就回退到 Mock Φ，保证不卡住 UI。
+
+提醒：节点数别贪多（≤7），否则 PyPhi 会明显变慢；离散化方式可从 zscore>0 改为“相对基线阈值”或“分位数”，按你的任务更稳健。

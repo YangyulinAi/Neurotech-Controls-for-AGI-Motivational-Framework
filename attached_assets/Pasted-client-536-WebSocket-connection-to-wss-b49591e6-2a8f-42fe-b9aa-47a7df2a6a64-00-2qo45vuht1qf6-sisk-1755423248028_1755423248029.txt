@@ -1,0 +1,139 @@
+client:536 WebSocket connection to 'wss://b49591e6-2a8f-42fe-b9aa-47a7df2a6a64-00-2qo45vuht1qf6.sisko.replit.dev/?token=48AKUqm-n9Np' failed: 
+client:536 Uncaught (in promise) SyntaxError: Failed to construct 'WebSocket': The URL 'wss://localhost:undefined/?token=48AKUqm-n9Np' is invalid.
+    at setupWebSocket (client:536:19)
+    at fallback (client:509:16)
+    at WebSocket.<anonymous> (client:555:7)
+
+chunk-WERSD76P.js?v=ef8cdc3e:21551 Download the React DevTools for a better development experience: https://reactjs.org/link/react-devtools
+home.tsx:105 === Starting Analysis Debug ===
+home.tsx:106 Selected file: set/s2/s2_1.set
+home.tsx:107 Environment: 
+Object
+home.tsx:121 Sending analysis request: 
+Object
+home.tsx:131 Analysis response status: 200
+home.tsx:132 Analysis response headers: 
+Object
+home.tsx:136 === Analysis Started Successfully ===
+home.tsx:137 Analysis response data: 
+Object
+home.tsx:138 Analysis PID: 8810
+home.tsx:139 Analysis file path: undefined
+home.tsx:140 Phi computation enabled: undefined
+training-progress.tsx:35 Training progress WebSocket connected to wss://b49591e6-2a8f-42fe-b9aa-47a7df2a6a64-00-2qo45vuht1qf6.sisko.replit.dev/ws
+training-progress.tsx:41 Training progress component received data: 
+Object
+training-progress.tsx:59 Training progress WebSocket disconnected
+use-websocket.ts:56 WebSocket connection to 'wss://b49591e6-2a8f-42fe-b9aa-47a7df2a6a64-00-2qo45vuht1qf6.sisko.replit.dev/ws' failed: 
+(anonymous)	@	use-websocket.ts:56
+use-websocket.ts:233 WebSocket error: 
+Event
+wsRef.current.onerror	@	use-websocket.ts:233
+use-websocket.ts:56 WebSocket connection to 'wss://b49591e6-2a8f-42fe-b9aa-47a7df2a6a64-00-2qo45vuht1qf6.sisko.replit.dev/ws' failed: 
+(anonymous)	@	use-websocket.ts:56
+use-websocket.ts:233 WebSocket error: 
+Event
+wsRef.current.onerror	@	use-websocket.ts:233
+use-websocket.ts:56 WebSocket connection to 'wss://b49591e6-2a8f-42fe-b9aa-47a7df2a6a64-00-2qo45vuht1qf6.sisko.replit.dev/ws' failed: 
+(anonymous)	@	use-websocket.ts:56
+use-websocket.ts:233 WebSocket error: 
+Event {isTrusted: true, type: 'error', target: WebSocket, currentTarget: WebSocket, eventPhase: 2, …}
+isTrusted
+: 
+true
+bubbles
+: 
+false
+cancelBubble
+: 
+false
+cancelable
+: 
+false
+composed
+: 
+false
+currentTarget
+: 
+WebSocket {url: 'wss://b49591e6-2a8f-42fe-b9aa-47a7df2a6a64-00-2qo45vuht1qf6.sisko.replit.dev/ws', readyState: 3, bufferedAmount: 0, onopen: ƒ, onerror: ƒ, …}
+defaultPrevented
+: 
+false
+eventPhase
+: 
+0
+returnValue
+: 
+true
+srcElement
+: 
+WebSocket {url: 'wss://b49591e6-2a8f-42fe-b9aa-47a7df2a6a64-00-2qo45vuht1qf6.sisko.replit.dev/ws', readyState: 3, bufferedAmount: 0, onopen: ƒ, onerror: ƒ, …}
+target
+: 
+WebSocket {url: 'wss://b49591e6-2a8f-42fe-b9aa-47a7df2a6a64-00-2qo45vuht1qf6.sisko.replit.dev/ws', readyState: 3, bufferedAmount: 0, onopen: ƒ, onerror: ƒ, …}
+timeStamp
+: 
+19425.69999998808
+type
+: 
+"error"
+[[Prototype]]
+: 
+Event
+use-websocket.ts:56 WebSocket connection to 'wss://b49591e6-2a8f-42fe-b9aa-47a7df2a6a64-00-2qo45vuht1qf6.sisko.replit.dev/ws' failed: 
+use-websocket.ts:233 WebSocket error: 
+Event {isTrusted: true, type: 'error', target: WebSocket, currentTarget: WebSocket, eventPhase: 2, …}
+use-websocket.ts:56 WebSocket connection to 'wss://b49591e6-2a8f-42fe-b9aa-47a7df2a6a64-00-2qo45vuht1qf6.sisko.replit.dev/ws' failed: 
+use-websocket.ts:233 WebSocket error: 
+Event {isTrusted: true, type: 'error', target: WebSocket, currentTarget: WebSocket, eventPhase: 2, …}
+use-websocket.ts:56 WebSocket connection to 'wss://b49591e6-2a8f-42fe-b9aa-47a7df2a6a64-00-2qo45vuht1qf6.sisko.replit.dev/ws' failed: 
+use-websocket.ts:233 WebSocket error: 
+Event {isTrusted: true, type: 'error', target: WebSocket, currentTarget: WebSocket, eventPhase: 2, …}
+use-websocket.ts:56 WebSocket connection to 'wss://b49591e6-2a8f-42fe-b9aa-47a7df2a6a64-00-2qo45vuht1qf6.sisko.replit.dev/ws' failed: 
+use-websocket.ts:233 WebSocket error: 
+Event {isTrusted: true, type: 'error', target: WebSocket, currentTarget: WebSocket, eventPhase: 2, …}
+use-websocket.ts:56 WebSocket connection to 'wss://b49591e6-2a8f-42fe-b9aa-47a7df2a6a64-00-2qo45vuht1qf6.sisko.replit.dev/ws' failed: 
+use-websocket.ts:233 WebSocket error: 
+Event {isTrusted: true, type: 'error', target: WebSocket, currentTarget: WebSocket, eventPhase: 2, …}
+isTrusted
+: 
+true
+bubbles
+: 
+false
+cancelBubble
+: 
+false
+cancelable
+: 
+false
+composed
+: 
+false
+currentTarget
+: 
+WebSocket {url: 'wss://b49591e6-2a8f-42fe-b9aa-47a7df2a6a64-00-2qo45vuht1qf6.sisko.replit.dev/ws', readyState: 3, bufferedAmount: 0, onopen: ƒ, onerror: ƒ, …}
+defaultPrevented
+: 
+false
+eventPhase
+: 
+0
+returnValue
+: 
+true
+srcElement
+: 
+WebSocket {url: 'wss://b49591e6-2a8f-42fe-b9aa-47a7df2a6a64-00-2qo45vuht1qf6.sisko.replit.dev/ws', readyState: 3, bufferedAmount: 0, onopen: ƒ, onerror: ƒ, …}
+target
+: 
+WebSocket {url: 'wss://b49591e6-2a8f-42fe-b9aa-47a7df2a6a64-00-2qo45vuht1qf6.sisko.replit.dev/ws', readyState: 3, bufferedAmount: 0, onopen: ƒ, onerror: ƒ, …}
+timeStamp
+: 
+48274.29999998212
+type
+: 
+"error"
+[[Prototype]]
+: 
+Event

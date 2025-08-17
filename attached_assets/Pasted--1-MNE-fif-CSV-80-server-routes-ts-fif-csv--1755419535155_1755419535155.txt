@@ -1,0 +1,92 @@
+结论：要求 1（支持 MNE/.fif/CSV 的“上传与分析”）
+
+完成度 ≈ 80%。
+
+✅ 后端与分析脚本：已支持
+
+server/routes.ts 的上传白名单已包含 .fif、.csv（还额外支持 .edf/.npz/.txt），/api/data-files 也会枚举 .fif/.csv。
+
+新脚本 tests/analyze_file_onnx.py 已用 MNE 读取 .set（read_raw_eeglab）、.fif（read_raw_fif），并支持 CSV（pandas.read_csv），随后统一走你现有的特征→ONNX→/api/bci/broadcast 推送链路。
+
+install_production_deps.py 已包含 mne、pandas 的安装逻辑（不错！）。
+
+❗ 前端上传入口：仍限制为 .set
+
+client/src/pages/home.tsx 中 “Upload Data Files” 的 <input accept="..."> 目前只允许 .set，导致 网页端“上传”动作无法直接选取 .fif/.csv（虽然服务器端是支持的）。
+
+❗ MNE Epochs（分段态 -epo.fif）暂未覆盖
+
+analyze_file_onnx.py 只处理 Raw（read_raw_fif），没有分支去读 mne.read_epochs。若用户给的是 -epo.fif，现在会直接报错。
+
+立刻可做的最小修复（把要求 1 补到 100%）
+1）前端：放开上传类型
+
+文件 client/src/pages/home.tsx
+把“上传数据”的 <input> 改为同时接受三类文件：
+
+- <input id="data-upload" type="file" accept=".set" multiple ... />
++ <input id="data-upload" type="file" accept=".set,.fif,.csv" multiple ... />
+
+
+同时把页面上“Dataset Type - Only SET files supported”那块文案改成“Supported: SET / FIF / CSV”。
+
+2）分析脚本：支持 MNE Epochs
+
+文件 tests/analyze_file_onnx.py 的“加载任意格式”函数内（已有 .set/.fif/.csv 分支），给 .fif 补一个 Epochs 回退（伪代码示意，直接粘进去即可）：
+
+elif ext == '.fif':
+    try:
+        raw = mne.io.read_raw_fif(filepath, preload=True)
+        mode = 'raw'
+    except Exception:
+        # 尝试按 Epochs 读取（-epo.fif）
+        epochs = mne.read_epochs(filepath, preload=True, verbose=False)
+        mode = 'epochs'
+        # 统一到 raw-like：将 epochs 堆叠为 (n_channels, n_epochs*n_times)
+        data_3d = epochs.get_data()               # (n_epochs, n_channels, n_times)
+        data = data_3d.transpose(1,0,2).reshape(data_3d.shape[1], -1, order='C')
+        info = mne.create_info(ch_names=epochs.ch_names, sfreq=epochs.info['sfreq'], ch_types='eeg')
+        raw = mne.io.RawArray(data, info)
+    print(f"DEBUG: Loaded FIF ({mode}) with {len(raw.ch_names)} ch, {raw.n_times} samples")
+
+
+这样：Raw 与 Epochs 都转成 RawArray，后续你的滑窗/特征/ONNX 推理无需改动。
+
+3）诊断脚本：把 mne/pandas 纳入检查
+
+文件 tools/check_production.py
+在 required_modules 里加入：
+
+required_modules = [
+    'numpy','scipy','torch','onnxruntime',
+    'mne','pandas'
+]
+
+
+这样 /api/diagnostic/production-check 就能一次性暴露缺的依赖。
+
+进一步的优化建议（可选但很实用）
+
+CSV 自适应采样率：CSV 若首列是时间戳，建议根据相邻差分估计 fs（而不是固定 256Hz），鲁棒性更好。
+
+更宽容的 CSV 解析：允许列名大小写/空格差异；若无时间列则使用 fs_hint（从前端传入或默认 256）。
+
+.edf 真支持：既然后端白名单里加了 .edf，可在脚本里补 mne.io.read_raw_edf 的分支（装了 MNE 通常即可读）。
+
+上传端再加一重校验：前端在 handleDataUpload 里也过滤一次后缀，错误时 toast 早反馈。
+
+文档 & 示例数据：在 README（或前端 “Help/Docs” 卡片）明确三种格式的字段要求与示例下载（每种给一个小文件，用户即传即用）。
+
+环境约束：install_production_deps.py 里把包版本写得更稳一点（如 mne>=1.6,<2, pandas>=2），避免未来大版本 break。
+
+检查单（改完就能对外说“已支持多格式上传”）
+
+前端：能从文件选择器直接选 .set/.fif/.csv 并成功上传，toast 显示 count ✅
+
+/api/data-files：能列出三种格式 ✅
+
+/api/start-analysis：选择 Raw .fif 与 Epochs -epo.fif 都能跑通，Dashboard 有实时更新 ✅
+
+诊断：/api/diagnostic/production-check 输出包含 mne/pandas 检查 ✅
+
+安装：/api/install-production-deps 成功安装并回显版本 ✅

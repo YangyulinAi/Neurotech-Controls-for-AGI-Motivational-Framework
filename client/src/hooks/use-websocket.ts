@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { BciDataPoint, ConnectionStatus, WebSocketMessage } from '@/types/bci';
 import { useToast } from '@/hooks/use-toast';
+import { throttle } from 'lodash';
+import { SmoothedThrottler } from '@/utils/smoothing';
 
 export function useWebSocket() {
   const { toast } = useToast();
@@ -24,10 +26,27 @@ export function useWebSocket() {
   const [dataHistory, setDataHistory] = useState<BciDataPoint[]>([]);
   const [totalDataPoints, setTotalDataPoints] = useState(0);
   
+  // Configuration constants
+  const maxHistorySize = 3600; // Keep 30 minutes at 2 Hz
+  
+  // Enhanced smoothing and throttling for beautiful demo curves
+  const smootherRef = useRef<SmoothedThrottler>(new SmoothedThrottler(0.2, 100));
+  
+  // Throttled function to update chart data with EMA smoothing
+  const pushBuffered = useMemo(() => 
+    throttle((points: BciDataPoint[]) => {
+      setDataHistory(prev => {
+        const newHistory = [...prev, ...points];
+        // Keep only recent data to prevent memory issues
+        return newHistory.slice(-maxHistorySize);
+      });
+    }, 100), // Update charts every 100ms max
+    [maxHistorySize]
+  );
+  
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const maxHistorySize = 3600; // Keep 30 minutes at 2 Hz
 
   const connect = useCallback(() => {
     try {
@@ -121,37 +140,52 @@ export function useWebSocket() {
             const phi = typeof message.phi === 'number' ? Math.max(0, message.phi) : undefined;
 
             console.log('Processed BCI data point:', { valence, arousal, phi });
-            console.log('Data flow status before update:', dataFlowStatus);
 
-            const dataPoint: BciDataPoint = {
+            // Apply EMA smoothing and throttling for beautiful demo curves
+            const rawData = {
               valence,
               arousal,
               phi,
               timestamp: Date.now(),
             };
 
-            setCurrentData(dataPoint);
+            const smoothedBatch = smootherRef.current.process(rawData);
+            
+            // Create base data point for immediate UI feedback
+            const baseDataPoint: BciDataPoint = {
+              valence,
+              arousal,
+              phi,
+              timestamp: rawData.timestamp,
+            };
+
+            setCurrentData(baseDataPoint);
             setTotalDataPoints(prev => prev + 1);
 
-            setDataHistory(prev => {
-              const updated = [...prev, dataPoint];
-              if (updated.length > maxHistorySize) {
-                return updated.slice(-maxHistorySize);
-              }
-              return updated;
-            });
+            // Process smoothed batch for chart updates (throttled)
+            if (smoothedBatch && smoothedBatch.length > 0) {
+              const chartDataPoints = smoothedBatch.map(item => ({
+                valence: item.valence,
+                arousal: item.arousal,
+                phi: item.phi,
+                timestamp: item.timestamp,
+              }));
+              
+              pushBuffered(chartDataPoints);
+            }
 
-            setConnectionStatus(prev => ({
-              ...prev,
-              lastUpdate: new Date(),
-              error: null,
-            }));
-            
+            // Update data flow status
             setDataFlowStatus(prev => ({
               ...prev,
               isReceivingData: true,
               lastDataTime: new Date(),
               analysisActive: true,
+            }));
+
+            setConnectionStatus(prev => ({
+              ...prev,
+              lastUpdate: new Date(),
+              error: null,
             }));
             return;
           }
@@ -255,6 +289,10 @@ export function useWebSocket() {
 
   const clearHistory = useCallback(() => {
     setDataHistory([]);
+    setCurrentData(null);
+    setTotalDataPoints(0);
+    // Reset smoothing and throttling state for fresh start
+    smootherRef.current.reset();
   }, []);
 
   // Check for data timeout (no data received for 30 seconds)

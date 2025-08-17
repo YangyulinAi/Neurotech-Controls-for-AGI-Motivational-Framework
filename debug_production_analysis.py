@@ -33,12 +33,19 @@ def test_environment():
     except ImportError as e:
         print(f"ONNX Runtime import failed: {e}")
     
-    # Test if we can find the analysis script
-    script_path = "tests/analyze_set_file_onnx.py"
-    if os.path.exists(script_path):
-        print(f"Analysis script found: {script_path}")
+    # Test if we can find the analysis scripts
+    old_script_path = "tests/analyze_set_file_onnx.py"
+    new_script_path = "tests/analyze_file_onnx.py"
+    
+    if os.path.exists(old_script_path):
+        print(f"Legacy analysis script found: {old_script_path}")
     else:
-        print(f"Analysis script NOT found: {script_path}")
+        print(f"Legacy analysis script NOT found: {old_script_path}")
+    
+    if os.path.exists(new_script_path):
+        print(f"New unified analysis script found: {new_script_path}")
+    else:
+        print(f"New unified analysis script NOT found: {new_script_path}")
     
     # Test if we can find the ONNX model
     model_path = "model/va_regressor.onnx"

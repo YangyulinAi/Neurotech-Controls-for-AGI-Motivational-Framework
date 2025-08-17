@@ -54,7 +54,11 @@ def extract_feats(window: np.ndarray, fs: int):
         de_vec: np.ndarray of shape (26,)
     """
     # 1) Spectrogram branch
-    _, _, Z = stft(window, fs, nperseg=fs//2, noverlap=fs//4)
+    # Ensure noverlap < nperseg for valid STFT parameters
+    nperseg = min(fs//2, window.shape[-1]//4)  # Ensure we have enough samples
+    nperseg = max(nperseg, 64)  # Minimum window size
+    noverlap = nperseg // 2  # Safe overlap (50%)
+    _, _, Z = stft(window, fs, nperseg=nperseg, noverlap=noverlap)
     spec = np.log1p(np.abs(Z))          # (n_channels, F, T)
     spec = spec.mean(axis=0)            # collapse channels -> (F, T)
     # Resize to 224x224

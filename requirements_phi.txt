@@ -1,22 +1,28 @@
-# Minimal dependencies for IIT Φ calculation - production-ready
-# Install with: pip install -r requirements_phi.txt
+# PyPhi Requirements for Real IIT Φ Calculation
+# WARNING: PyPhi has strict numpy version requirements that may conflict with other dependencies
+# Consider installing in a separate environment for production stability
 
-# Scientific computing (already available in most environments)
-numpy>=1.21.0
-scipy>=1.7.0
-torch>=1.12.0
+# Core IIT computation library
+pyphi==1.2.0
 
-# Network analysis for consciousness modeling
-networkx>=2.6.0
+# PyPhi specific dependencies (may require older versions)
+numpy>=1.21,<1.24  # PyPhi compatibility requirement
+scipy>=1.7,<1.11   # Compatible with PyPhi
 
-# Complexity analysis (lightweight)
-antropy>=0.1.4
+# Network analysis for consciousness measurement
+networkx>=2.6,<3.0
 
-# Parallel processing
-joblib>=1.1.0
+# Performance optimization for large networks
+numba>=0.56,<1.0
 
-# Configuration
-pyyaml>=5.0
+# Optional: Enhanced computation backends
+# pyemd>=0.5.1,<1.0      # Earth Mover's Distance for some PyPhi computations
+# cython>=0.29,<1.0      # C extensions for performance
 
-# Development and testing (minimal)
-pytest>=6.0.0
+# Note: If you encounter dependency conflicts, create a separate conda environment:
+# conda create -n pyphi python=3.9
+# conda activate pyphi  
+# pip install pyphi==1.2.0
+# 
+# Or use pip with --force-reinstall for specific numpy versions:
+# pip install --force-reinstall numpy==1.21.6 pyphi==1.2.0

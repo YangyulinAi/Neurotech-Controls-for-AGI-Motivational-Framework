@@ -25,7 +25,12 @@ def main():
     
     # Required packages for production
     packages = [
+        "numpy",
+        "scipy", 
+        "mne",  # MNE-Python for EEG data
+        "pandas",  # For CSV data handling
         "onnxruntime",
+        "pylsl",  # Lab Streaming Layer
         "requests",  # For API calls
     ]
     
@@ -39,17 +44,38 @@ def main():
     
     # Test imports
     print("\n=== Testing Imports ===")
-    try:
-        import onnxruntime as ort
-        print(f"✓ ONNX Runtime {ort.__version__} imported successfully")
-    except ImportError as e:
-        print(f"✗ ONNX Runtime import failed: {e}")
+    import_tests = [
+        ("numpy", "np", "__version__"),
+        ("scipy", "scipy", "__version__"),
+        ("mne", "mne", "__version__"),
+        ("pandas", "pd", "__version__"),
+        ("onnxruntime", "ort", "__version__"),
+        ("pylsl", "pylsl", "version"),
+        ("requests", "requests", "__version__"),
+    ]
     
-    try:
-        import requests
-        print(f"✓ Requests imported successfully")
-    except ImportError as e:
-        print(f"✗ Requests import failed: {e}")
+    for module_name, import_as, version_attr in import_tests:
+        try:
+            module = __import__(module_name)
+            if hasattr(module, version_attr):
+                version = getattr(module, version_attr)
+                print(f"✓ {module_name} {version} imported successfully")
+            else:
+                print(f"✓ {module_name} imported successfully")
+        except ImportError as e:
+            print(f"✗ {module_name} import failed: {e}")
+        except RuntimeError as e:
+            if module_name == "pylsl" and "LSL binary library" in str(e):
+                print(f"⚠ {module_name} requires liblsl binary - install with: conda install -c conda-forge liblsl")
+            else:
+                print(f"✗ {module_name} runtime error: {e}")
+        except Exception as e:
+            print(f"✗ {module_name} unexpected error: {e}")
+    
+    print("\n=== LSL Library Notice ===")
+    print("For real-time EEG streaming, install liblsl binary:")
+    print("  conda install -c conda-forge liblsl")
+    print("Or download from: https://github.com/sccn/liblsl/releases")
 
 if __name__ == "__main__":
     main()

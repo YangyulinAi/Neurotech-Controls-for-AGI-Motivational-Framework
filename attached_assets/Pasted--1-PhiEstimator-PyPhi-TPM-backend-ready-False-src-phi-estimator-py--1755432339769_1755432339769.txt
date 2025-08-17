@@ -1,0 +1,82 @@
+关键问题与修复
+1) PhiEstimator 的 PyPhi 自检用的 TPM 形状不对 → backend_ready 会被置回 False
+
+位置：src/phi_estimator.py（构造函数里“Test PyPhi functionality”那段）
+
+当前用的：
+
+tpm = np.array([[0, 0], [1, 1]])        # ❌ 这不是 PyPhi 需要的形状
+cm  = np.array([[1, 1], [1, 1]])
+network = pyphi.Network(tpm, cm=cm)
+
+
+PyPhi 1.x 需要 形状为 [2**n, n, 2] 的 TPM。按 2 个节点的最小示例，应改成（任选一个确定性的转换即可——下面给出可用的“保持原状态”网络）：
+
+# ✅ 正确形状的 2 节点 TPM（4 个系统状态 × 2 个节点 × 节点取 0/1 的条件概率）
+tpm = np.zeros((4, 2, 2), dtype=float)
+# 状态 00
+tpm[0, 0, 0] = 1.0; tpm[0, 1, 0] = 1.0
+# 状态 01
+tpm[1, 0, 0] = 1.0; tpm[1, 1, 1] = 1.0
+# 状态 10
+tpm[2, 0, 1] = 1.0; tpm[2, 1, 0] = 1.0
+# 状态 11
+tpm[3, 0, 1] = 1.0; tpm[3, 1, 1] = 1.0
+
+cm = np.ones((2, 2), dtype=int) - np.eye(2, dtype=int)  # 全连、无自环
+net = pyphi.Network(tpm, cm)
+state = (0, 0)
+subsystem = pyphi.Subsystem(net, state)
+test_phi = pyphi.compute.big_phi(subsystem)  # 成功则说明 PyPhi 可用
+
+
+现在的错误会触发 except 分支，把 self.backend_ready=False，后续 compute/estimate_phi 就会直接走“近似/演示”路径，导致你看到的还是假 Φ。
+
+建议：把自检 TPM 按上面改正，或更简单——直接调用你已经写好的 compute_phi_from_eeg_segment 来做一次小窗自检（更贴近实战）。
+
+2) 环境依赖冲突（生产 numpy>=1.24 vs PyPhi 需要 <1.24）
+
+你已提供了独立的 requirements_phi.txt 与 install_pyphi.py（👍）；
+
+但服务器若只装了 requirements_prod.txt，/api/test-phi 和 start-analysis 启的 Python 进程仍然会导不进 PyPhi，从而回退近似。
+
+建议两种做法（二选一）：
+
+在服务器上为 PyPhi 分配独立虚拟环境（你脚本里已有 conda/pip 方案），并在 server/routes.ts 的 spawn 里通过 env 指定该 Python；
+
+或把生产 numpy 放宽“上限 <1.24”，统一进单环境（但要自测 MNE/ONNXRuntime 兼容性）。
+
+其他小观察（非阻断）
+
+UI 允许选 .npz/.edf/.txt，而默认分析只处理 .set/.fif/.csv——建议在文案里标明“当前仅分析这三种，其余仅存储”。
+
+仓库里暂未见演示视频文件（如果 M4 需要视频，请另行提交外链或加入 docs/）。
+
+快速自检（照做就能确认“真 Φ”真的在跑）
+
+环境就绪
+
+pip install -r requirements_phi.txt
+# 或运行 install_pyphi.py，确保 PyPhi 可导入
+
+
+后端 Quick Test（现在它已不再用随机数）
+前端主页选 Phi Method = IIT3.0 → 点「🧪 Quick Test Φ」。
+返回 JSON 中应看到：backend_ready: true 且 avgPhi/minPhi/maxPhi 是实算出来的值（非固定随机）。
+
+离线文件分析（Start Analysis）
+选择 .set/.fif/.csv 文件，勾选 Φ，phiMethod=IIT3.0。
+后端日志应打印类似：
+
+[PHI] Real PyPhi-based Φ estimator loaded
+[PHI] backend_ready=True, method=IIT3.0
+Window k ... Φ=0.0xx  # 窗间会波动
+
+
+命令行兜底
+
+python tests/analyze_file_onnx.py "data/training set/s2/s2_1.set" \
+  --compute_phi --phi_method IIT3.0
+
+
+看到窗口级输出里 Φ=... 随时间/窗变化，即为真 Φ。

@@ -7,7 +7,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
+import type { PhiMethod, AnalysisMode } from '@/types/bci';
 
 export default function Home() {
   const [, setLocation] = useLocation();
@@ -29,11 +31,16 @@ export default function Home() {
   const [windowSize, setWindowSize] = useState(5.0);
   const [overlap, setOverlap] = useState(0.5);
   
-  // IIT Φ 计算状态
+  // Enhanced Φ controls and analysis mode
   const [showPhiInterface, setShowPhiInterface] = useState(false);
-  const [enablePhi, setEnablePhi] = useState(false);
-  const [phiMethod, setPhiMethod] = useState<'mock' | 'IIT3.0' | 'IIT4.0_light'>('mock');
+  const [phiMethod, setPhiMethod] = useState<PhiMethod>('off');
+  const [analysisMode, setAnalysisMode] = useState<AnalysisMode>('offline');
   const [phiMaxChannels, setPhiMaxChannels] = useState(8);
+  const [analysisInProgress, setAnalysisInProgress] = useState(false);
+  const [analysisDisabledUntil, setAnalysisDisabledUntil] = useState<number | null>(null);
+
+  // Check if analysis is currently disabled due to 409 error
+  const isAnalysisDisabled = analysisDisabledUntil ? Date.now() < analysisDisabledUntil : false;
 
   // Fetch available data files for analysis
   const fetchDataFiles = async () => {
@@ -109,8 +116,9 @@ export default function Home() {
     try {
       const requestBody = { 
         filename,
-        computePhi: true,
-        phiMethod: 'mock'
+        computePhi: phiMethod !== 'off',
+        phiMethod: phiMethod === 'off' ? 'mock' : phiMethod,
+        mode: 'offline'  // 强制设置为离线模式，因为这是文件分析
       };
       
       console.log('Sending analysis request:', requestBody);
@@ -135,22 +143,35 @@ export default function Home() {
         console.log('Phi computation enabled:', result.computePhi);
         
         setShowDataSelection(false);
-        setLocation('/dashboard');
+        setLocation('/dashboard?mode=offline');
         toast({
-          title: 'Real Data Analysis Started',
-          description: result.message || `Now analyzing real EEG data from ${filename}`,
+          title: 'Offline Analysis Started',
+          description: result.message || `Analyzing EEG file: ${filename}`,
           duration: 8000,
         });
+      } else if (response.status === 409) {
+        // Handle 409 Conflict - analysis already running
+        setAnalysisDisabledUntil(Date.now() + 5000); // Disable for 5 seconds
+        toast({
+          title: 'Analysis Already Running',
+          description: 'Please wait for the current analysis to complete before starting a new one.',
+          variant: 'destructive',
+          duration: 5000,
+        });
       } else {
-        const errorText = await response.text();
-        console.error('Analysis failed with response:', errorText);
-        throw new Error(`Failed to start analysis: ${response.statusText} - ${errorText}`);
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('Analysis failed with response:', errorData);
+        toast({
+          title: 'Analysis Failed',
+          description: errorData.error || `Server error: ${response.status}`,
+          variant: 'destructive',
+        });
       }
     } catch (error) {
       console.error('Error starting analysis:', error);
       toast({
-        title: 'Error',
-        description: `Failed to start real data analysis: ${error.message}`,
+        title: 'Connection Error',
+        description: `Failed to start analysis: ${error.message}`,
         variant: 'destructive',
       });
     }
@@ -263,7 +284,7 @@ export default function Home() {
           learningRate: learningRate,
           windowSize: windowSize,
           overlap: overlap,
-          computePhi: enablePhi,
+          computePhi: phiMethod !== 'off',
           phiMethod: phiMethod,
           phiMaxChannels: phiMaxChannels
         }),
@@ -455,17 +476,18 @@ export default function Home() {
                 <div className="h-8 w-8 text-blue-400 group-hover:text-blue-300 transition-colors">🧠</div>
                 <Badge>Real Data</Badge>
               </div>
-              <CardTitle className="text-white">Select SET File</CardTitle>
+              <CardTitle className="text-white">Offline Analysis</CardTitle>
               <CardDescription className="text-gray-400">
-                Choose SET format EEG data from subject folders for real-time analysis
+                Analyze existing EEG files (SET, FIF, CSV formats) for testing and validation
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Button 
                 onClick={() => setShowDataSelection(true)}
                 className="w-full bg-blue-600 hover:bg-blue-700"
+                disabled={isAnalysisDisabled}
               >
-                📊 Select SET File
+                {isAnalysisDisabled ? '⏳ Please Wait...' : '📊 Analyze File'}
               </Button>
             </CardContent>
           </Card>
@@ -507,11 +529,11 @@ export default function Home() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="h-8 w-8 text-green-400">🗃️</div>
-                <Badge>SET</Badge>
+                <Badge>Multi-Format</Badge>
               </div>
               <CardTitle className="text-white">Upload Data</CardTitle>
               <CardDescription className="text-gray-400">
-                Upload SET format EEG data files to subject folders for analysis and training
+                Upload EEG data files (SET, FIF, CSV formats) to subject folders for analysis and training
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -526,7 +548,7 @@ export default function Home() {
                 <input
                   id="data-upload"
                   type="file"
-                  accept=".set"
+                  accept=".set,.fif,.csv,.npz,.edf,.txt"
                   multiple
                   onChange={handleDataUpload}
                   className="hidden"
@@ -564,9 +586,9 @@ export default function Home() {
                 <div className="h-8 w-8 text-yellow-400">⚡</div>
                 <Badge>Live</Badge>
               </div>
-              <CardTitle className="text-white">Real-time Device</CardTitle>
+              <CardTitle className="text-white">Real-time Analysis</CardTitle>
               <CardDescription className="text-gray-400">
-                Connect to live EEG devices using Lab Streaming Layer (LSL) protocol
+                Connect live EEG devices via Lab Streaming Layer (LSL) for real-time emotion monitoring
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -574,7 +596,7 @@ export default function Home() {
                 className="w-full bg-yellow-600 hover:bg-yellow-700"
                 onClick={() => setLocation('/dashboard?mode=realtime')}
               >
-                🖥️ Connect Device
+                ⚡ Start Real-time
               </Button>
             </CardContent>
           </Card>
@@ -696,8 +718,8 @@ export default function Home() {
               <h4 className="font-medium text-white mb-2">For Simulation Testing:</h4>
               <ol className="text-gray-300 space-y-1 text-sm">
                 <li>1. Upload your ONNX model (optional)</li>
-                <li>2. Upload simulation data files</li>
-                <li>3. Launch the dashboard to view results</li>
+                <li>2. Upload EEG data files (SET/FIF/CSV formats)</li>
+                <li>3. Select EEG file and view real-time results</li>
               </ol>
             </div>
             <div>
@@ -721,59 +743,7 @@ export default function Home() {
         </div>
       </footer>
 
-      {/* NPZ Data File Selection Dialog */}
-      <Dialog open={showDataSelection} onOpenChange={setShowDataSelection}>
-        <DialogContent className="bg-gray-800 border-gray-700 text-white max-w-md">
-          <DialogHeader>
-            <DialogTitle>Select Data File</DialogTitle>
-            <DialogDescription className="text-gray-400">
-              Choose a SET file for real EEG analysis from subject folders
-            </DialogDescription>
-          </DialogHeader>
-          <div className="max-h-96 overflow-y-auto">
-            {loadingFiles ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="text-gray-400">Loading data files...</div>
-              </div>
-            ) : dataFiles.length === 0 ? (
-              <div className="text-center py-8 text-gray-400">
-                No SET files found. Upload SET files to subject folders first.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {dataFiles.map((file) => {
-                  const displayName = file.replace(/^set\//, '');
-                  
-                  return (
-                    <Button
-                      key={file}
-                      variant="outline"
-                      className="w-full justify-between bg-gray-700 border-gray-600 hover:bg-gray-600 text-white"
-                      onClick={() => handleDataSelection(file)}
-                    >
-                      <span className="flex items-center">
-                        📊 {displayName}
-                      </span>
-                      <span className="text-xs bg-gray-600 px-2 py-1 rounded">
-                        SET
-                      </span>
-                    </Button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-          <div className="flex justify-end space-x-2 pt-4">
-            <Button
-              variant="outline"
-              onClick={() => setShowDataSelection(false)}
-              className="bg-gray-700 border-gray-600 hover:bg-gray-600 text-white"
-            >
-              Cancel
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+
 
       {/* Training Interface Dialog */}
       <Dialog open={showTrainingInterface} onOpenChange={setShowTrainingInterface}>
@@ -1066,6 +1036,117 @@ export default function Home() {
         </DialogContent>
       </Dialog>
 
+      {/* Enhanced Data Selection Dialog with Φ Controls */}
+      <Dialog open={showDataSelection} onOpenChange={setShowDataSelection}>
+        <DialogContent className="bg-gray-800 border-gray-700 text-white max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Enhanced Analysis Configuration</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Configure analysis mode and consciousness measurement options
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6">
+            {/* Analysis Mode Selection */}
+            <div className="space-y-3">
+              <Label className="text-white font-medium">Analysis Mode</Label>
+              <RadioGroup value={analysisMode} onValueChange={(value: AnalysisMode) => setAnalysisMode(value)}>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="offline" id="offline" className="text-blue-500" />
+                  <Label htmlFor="offline" className="text-gray-300">Offline Analysis (File-based)</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="live" id="live" className="text-green-500" />
+                  <Label htmlFor="live" className="text-gray-300">Live Streaming (Real-time)</Label>
+                </div>
+              </RadioGroup>
+            </div>
+
+            {/* Φ Method Selection */}
+            <div className="space-y-3">
+              <Label className="text-white font-medium">Consciousness Measurement (IIT Φ)</Label>
+              <RadioGroup value={phiMethod} onValueChange={(value: PhiMethod) => setPhiMethod(value)}>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="off" id="phi-off" className="text-gray-500" />
+                  <Label htmlFor="phi-off" className="text-gray-300">Disabled</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="mock" id="phi-mock" className="text-yellow-500" />
+                  <Label htmlFor="phi-mock" className="text-gray-300">Mock (Testing)</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="IIT3.0" id="phi-iit3" className="text-cyan-500" />
+                  <Label htmlFor="phi-iit3" className="text-gray-300">IIT 3.0 (Standard)</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="IIT4.0_light" id="phi-iit4" className="text-purple-500" />
+                  <Label htmlFor="phi-iit4" className="text-gray-300">IIT 4.0 Light (Fast)</Label>
+                </div>
+              </RadioGroup>
+            </div>
+
+            {/* File Selection */}
+            <div className="space-y-3">
+              <Label className="text-white font-medium">Select EEG File</Label>
+              <div className="max-h-64 overflow-y-auto border border-gray-600 rounded-lg p-3">
+                {loadingFiles ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="text-gray-400">Loading data files...</div>
+                  </div>
+                ) : dataFiles.length === 0 ? (
+                  <div className="text-center py-8 text-gray-400">
+                    No EEG files found. Upload SET, FIF, or CSV files to subject folders first.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {dataFiles.map((file) => {
+                      const displayName = file.replace(/^set\//, '');
+                      const format = file.split('.').pop()?.toUpperCase() || 'EEG';
+                      
+                      return (
+                        <Button
+                          key={file}
+                          variant="outline"
+                          className="w-full justify-between bg-gray-700 border-gray-600 hover:bg-gray-600 text-white"
+                          onClick={() => handleDataSelection(file)}
+                          disabled={analysisInProgress}
+                        >
+                          <span className="flex items-center">
+                            📊 {displayName}
+                          </span>
+                          <Badge variant="secondary" className="bg-gray-600 text-gray-200">
+                            {format}
+                          </Badge>
+                        </Button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Status Display */}
+            {analysisInProgress && (
+              <div className="flex items-center space-x-2 text-blue-400">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400"></div>
+                <span>Starting analysis...</span>
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end space-x-2 pt-4">
+            <Button
+              variant="outline"
+              onClick={() => setShowDataSelection(false)}
+              className="bg-gray-700 border-gray-600 hover:bg-gray-600 text-white"
+              disabled={analysisInProgress}
+            >
+              Cancel
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* IIT Φ Test Dialog */}
       <Dialog open={showPhiInterface} onOpenChange={setShowPhiInterface}>
         <DialogContent className="bg-gray-800 border-gray-700 text-white max-w-lg">
@@ -1082,11 +1163,12 @@ export default function Home() {
             {/* Calculation Method Selection */}
             <div className="space-y-2">
               <Label className="text-gray-300">Calculation Method</Label>
-              <Select value={phiMethod} onValueChange={(value: any) => setPhiMethod(value)}>
+              <Select value={phiMethod} onValueChange={(value: PhiMethod) => setPhiMethod(value)}>
                 <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="off">Disabled</SelectItem>
                   <SelectItem value="mock">Mock (Placeholder Mode)</SelectItem>
                   <SelectItem value="IIT3.0">IIT 3.0 (Standard Algorithm)</SelectItem>
                   <SelectItem value="IIT4.0_light">IIT 4.0 Light (Lightweight)</SelectItem>
@@ -1118,17 +1200,11 @@ export default function Home() {
               </p>
             </div>
 
-            {/* Enable in Training */}
+            {/* Phi Method Status */}
             <div className="flex items-center space-x-2">
-              <Checkbox 
-                id="enable-phi" 
-                checked={enablePhi}
-                onCheckedChange={setEnablePhi}
-                className="border-gray-600"
-              />
-              <Label htmlFor="enable-phi" className="text-gray-300 cursor-pointer">
-                Enable Φ calculation in next training
-              </Label>
+              <div className="text-sm text-gray-400">
+                Current Phi Mode: <span className="text-cyan-400 font-medium">{phiMethod === 'off' ? 'Disabled' : phiMethod}</span>
+              </div>
             </div>
 
             {/* Information */}
@@ -1163,8 +1239,8 @@ export default function Home() {
                     setShowPhiInterface(false);
                     toast({
                       title: '✓ Φ Calculation Config Saved',
-                      description: enablePhi ? 
-                        `Next training will use ${phiMethod} method to calculate Φ values` : 
+                      description: phiMethod !== 'off' ? 
+                        `Phi method set to ${phiMethod} for analysis` : 
                         'Φ calculation disabled',
                       duration: 4000,
                     });

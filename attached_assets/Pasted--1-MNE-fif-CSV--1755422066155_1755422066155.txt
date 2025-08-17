@@ -1,0 +1,114 @@
+这个版本还没完全满足“要求 1（支持 MNE .fif/CSV）”，并且前后端在“允许上传的类型”和“可被分析的类型”上不一致；此外还缺少若干交付用的稳健性与可复现性改动。
+
+阻断问题（必须先修）
+
+上传类型与分析类型不一致
+
+前端仅允许上传 .set
+文件：client/src/pages/home.tsx
+现状：accept=".set"
+
+后端仅允许 .npz/.csv/.edf/.txt，不允许 .set/.fif（会直接拒绝 .set）
+文件：server/routes.ts
+现状：const allowedExtensions = ['.npz', '.csv', '.edf', '.txt']
+
+数据列表只枚举 .set
+文件：server/routes.ts 的 /api/data-files
+现状：只扫描 *.set，注释里还有“only SET files are supported”。
+
+分析脚本只支持 .set
+
+后端 /api/start-analysis 调用的是
+tests/analyze_set_file_onnx.py（只会用 scipy.io.loadmat 读 .set）；
+没有“任意格式加载”的统一脚本。
+
+分析请求把 Φ 固定为开启 + mock（前端选项不起作用）
+
+文件：client/src/pages/home.tsx
+现状：requestBody = { filename, computePhi: true, phiMethod: 'mock' }
+
+依赖安装与自检不完整
+
+install_production_deps.py 只装 onnxruntime/requests，未安装 mne/pandas/pylsl/numpy/scipy。
+
+tools/check_production.py 检查的模块也没有 mne/pandas/pylsl，Demo 数据只查 .set。
+
+快速补丁（最小改动就能把“要求 1”补齐）
+
+按顺序改，10–20 分钟能跑通。
+
+放开前端上传类型
+文件：client/src/pages/home.tsx
+把
+
+- accept=".set"
++ accept=".set,.fif,.csv"
+
+
+统一后端白名单（与上面一致）
+文件：server/routes.ts
+把
+
+- const allowedExtensions = ['.npz', '.csv', '.edf', '.txt']
++ const allowedExtensions = ['.set', '.fif', '.csv']
+
+
+先别放开 .edf/.npz，等脚本支持了再加。
+
+数据列表同时枚举 .set/.fif/.csv
+文件：server/routes.ts /api/data-files
+把只筛 *.set 的地方改为：
+
+- .filter(file => file.endsWith('.set'))
++ .filter(file => ['.set','.fif','.csv'].includes(path.extname(file).toLowerCase()))
+
+
+用“统一加载脚本”替代只读 .set 的脚本
+
+新增：tests/analyze_file_onnx.py（负责 .set/.fif/.csv，用 MNE 读 .set/.fif，pandas 读 .csv 并根据首列时间戳估计采样率）。
+
+在 server/routes.ts 的 /api/start-analysis 把参数里的脚本改为：
+
+- const args = ['tests/analyze_set_file_onnx.py', analysisFilename];
++ const args = ['tests/analyze_file_onnx.py', analysisFilename];
+
+
+这是核心一步：真正让 .fif/.csv 进入你的同一特征→ONNX→广播链路。
+（如果你要，我可以把 analyze_file_onnx.py 的可直接用版本发你。）
+
+把前端 Φ 的开关与方法传真
+文件：client/src/pages/home.tsx，启动分析的 requestBody 改为：
+
+- computePhi: true,
+- phiMethod: 'mock'
++ computePhi: enablePhi,
++ phiMethod: phiMethod
+
+
+后端再做白名单兜底：
+
+const allowedPhi = new Set(['mock','IIT3.0','IIT4.0_light']);
+const safePhi = allowedPhi.has(phiMethod) ? phiMethod : 'mock';
+
+
+安装与自检补齐
+
+install_production_deps.py 的包清单改为：
+numpy, scipy, mne, pandas, onnxruntime, pylsl, requests
+
+tools/check_production.py 的 required_modules 补上：
+mne, pandas, pylsl
+
+Demo 数据检查同时识别 .set/.fif/.csv。
+
+应该修、但不“卡 M4”的问题（建议顺手改）
+
+.set 加载方式：目前用 scipy.io.loadmat，容易被 v7.3/HDF5 和 .fdt 绊倒；建议改为 mne.io.read_raw_eeglab(preload=True)。
+
+LSL 采流稳健性：src/lsl_receiver.py 只有一次性连接、无重连/重采样；加“自动重连 + 采样率估计与重采样（到 256Hz）”，录演示会稳定很多。
+
+WS 心跳：服务器端对每个客户端做 ping/pong，避免“假在线”。
+
+子进程并发与超时：/api/start-analysis 加一个运行中互斥锁与 10 分钟兜底超时，防双击与卡死。
+
+错误文案统一：把“SET file not found”这类提示改为“Data file not found: …”。

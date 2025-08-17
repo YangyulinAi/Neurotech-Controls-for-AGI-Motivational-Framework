@@ -1,0 +1,301 @@
+1) 后端：统一白名单 + 任务互斥/超时 + 样本下载
+
+文件：server/routes.ts（或你实际放路由的文件）
+
+// 头部新增/确认
+import path from "path";
+import fs from "fs";
+import { spawn } from "child_process";
+import multer from "multer";
+
+const allowedExt = new Set([".set", ".fif", ".csv"]); // 和前端 accept 保持一致
+
+// 上传配置（白名单 + 大小限制 + 简单穿越防护）
+const uploadData = multer({
+  storage: dataStorage,
+  limits: { fileSize: 200 * 1024 * 1024, files: 10 },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (!allowedExt.has(ext)) return cb(new Error("Unsupported file type"));
+    if (file.originalname.includes("..") || file.originalname.includes("/")) return cb(new Error("Bad filename"));
+    cb(null, true);
+  }
+});
+
+// /api/data-files 枚举支持 .set/.fif/.csv
+router.get("/api/data-files", (req, res) => {
+  const subjectDir = req.query.subject || "s1";
+  const base = path.join(__dirname, "../data/training set", String(subjectDir));
+  const files = fs.readdirSync(base)
+    .filter(f => allowedExt.has(path.extname(f).toLowerCase()))
+    .map(f => `${subjectDir}/${f}`);
+  res.json({ files });
+});
+
+// ------------ 启动分析（互斥 + 超时 + phi 白名单） ------------
+let ANALYSIS_RUNNING = false;
+
+router.post("/api/start-analysis", async (req, res) => {
+  try {
+    const { filename, computePhi, phiMethod } = req.body ?? {};
+    if (!filename) return res.status(400).json({ error: "Missing filename" });
+
+    if (ANALYSIS_RUNNING) return res.status(409).json({ error: "Analysis already running" });
+
+    const allowedPhi = new Set(["mock", "IIT3.0", "IIT4.0_light"]);
+    const safePhi = allowedPhi.has(phiMethod) ? phiMethod : "mock";
+
+    const analysisFilename = path.join(__dirname, "../data/training set", filename);
+    if (!fs.existsSync(analysisFilename)) {
+      return res.status(404).json({ error: "Data file not found: " + analysisFilename });
+    }
+
+    ANALYSIS_RUNNING = true;
+    const args = ["tests/analyze_file_onnx.py", analysisFilename];
+    if (computePhi) args.push("--compute_phi", "--phi_method", safePhi);
+
+    const py = spawn(process.env.PYTHON || "python", args, { env: process.env });
+    const killTimer = setTimeout(() => { try { py.kill("SIGKILL"); } catch {} }, 10 * 60 * 1000); // 10min
+
+    py.stdout.on("data", d => console.log("[PY]", d.toString().trim()));
+    py.stderr.on("data", d => console.error("[PY-ERR]", d.toString().trim()));
+    py.on("close", code => { clearTimeout(killTimer); ANALYSIS_RUNNING = false; console.log("analysis exit", code); });
+
+    return res.json({ ok: true });
+  } catch (e:any) {
+    ANALYSIS_RUNNING = false;
+    return res.status(500).json({ error: e?.message || "start-analysis failed" });
+  }
+});
+
+
+文件：server/index.ts（或主入口）—静态样本下载 & WS 心跳
+
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
+
+app.use(helmet());
+app.use(rateLimit({ windowMs: 60_000, max: 120 }));
+
+// 暴露样本下载
+import path from "path";
+app.use("/samples", express.static(path.join(__dirname, "../samples")));
+
+// WebSocket 心跳（假在线清理）
+const INTERVAL = 30_000;
+wss.on("connection", (ws:any) => {
+  ws.isAlive = true;
+  ws.on("pong", () => ws.isAlive = true);
+});
+setInterval(() => {
+  wss.clients.forEach((ws:any) => {
+    if (!ws.isAlive) return ws.terminate();
+    ws.isAlive = false; ws.ping();
+  });
+}, INTERVAL);
+
+2) Python：统一加载脚本（.set/.fif/.csv）+ epochs 回退 + CSV fs 自适应
+
+文件：tests/analyze_file_onnx.py（直接替换为下面这个最小可用版本）
+
+#!/usr/bin/env python
+import os, sys, json, time, argparse
+import numpy as np
+import requests
+import mne
+import pandas as pd
+
+# 项目内导入（保持与你现有命名一致）
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+from preprocess import Preprocessor, extract_feats
+from onnx_runner import ONNXRunner
+from phi_estimator import PhiEstimator
+
+def jlog(**kw): print(json.dumps(kw, ensure_ascii=False), flush=True)
+
+def epochs_to_raw(epochs: mne.Epochs) -> mne.io.Raw:
+    data = epochs.get_data()  # (n_ep, n_ch, n_t)
+    X = data.transpose(1,0,2).reshape(data.shape[1], -1, order="C")
+    info = mne.create_info(epochs.ch_names, epochs.info["sfreq"], "eeg")
+    return mne.io.RawArray(X, info)
+
+def load_csv_as_raw(csv_path: str, fs_hint: float = 256.0) -> mne.io.Raw:
+    df = pd.read_csv(csv_path)
+    cols = [str(c).lower() for c in df.columns]
+    has_time = any(k in cols[0] for k in ["time","timestamp","sample"])
+    if has_time:
+        t = df.iloc[:,0].to_numpy(dtype=float)
+        X = df.iloc[:,1:].to_numpy(dtype=float).T  # ch × t
+        dt = np.diff(t)
+        good = np.isfinite(dt) & (dt > 0)
+        fs = float(np.round(1/np.median(dt[good]))) if good.any() else float(fs_hint)
+    else:
+        X = df.to_numpy(dtype=float).T
+        fs = float(fs_hint)
+    X[~np.isfinite(X)] = 0.0
+    info = mne.create_info([f"CH{i+1}" for i in range(X.shape[0])], fs, "eeg")
+    return mne.io.RawArray(X, info)
+
+def load_any(filepath: str, fs_hint: float = 256.0) -> mne.io.Raw:
+    ext = os.path.splitext(filepath)[1].lower()
+    if ext == ".set":
+        return mne.io.read_raw_eeglab(filepath, preload=True, verbose=False)
+    elif ext == ".fif":
+        try:
+            return mne.io.read_raw_fif(filepath, preload=True, verbose=False)
+        except Exception:
+            epochs = mne.read_epochs(filepath, preload=True, verbose=False)
+            return epochs_to_raw(epochs)
+    elif ext == ".csv":
+        return load_csv_as_raw(filepath, fs_hint=fs_hint)
+    else:
+        raise ValueError(f"Unsupported file type: {ext}")
+
+def parse_args():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("filepath")
+    ap.add_argument("--compute_phi", action="store_true")
+    ap.add_argument("--phi_method", default="mock", choices=["mock","IIT3.0","IIT4.0_light"])
+    ap.add_argument("--broadcast_url", default="http://localhost:5000/api/bci/broadcast")
+    ap.add_argument("--fs_hint", type=float, default=256.0)
+    ap.add_argument("--win", type=float, default=1.0)
+    ap.add_argument("--step", type=float, default=0.25)
+    return ap.parse_args()
+
+def main():
+    args = parse_args()
+    raw = load_any(args.filepath, fs_hint=args.fs_hint)
+    fs = int(raw.info["sfreq"]); data = raw.get_data()  # ch × t
+
+    pre = Preprocessor(fs, 1, 45)
+    onnx = ONNXRunner("model/va_regressor.onnx")
+    phi_est = PhiEstimator(method=args.phi_method)
+
+    win = int(fs * args.win); step = int(fs * args.step)
+    phi_prev = None
+    for start in range(0, data.shape[1] - win, step):
+        seg = data[:, start:start+win]            # ch × win
+        seg_t = seg.T                              # win × ch
+        pre_t = pre.transform(seg_t).T            # ch × win（与项目现有签名保持一致）
+        spec3, de = extract_feats(pre_t.T, fs)    # 复用你现有特征接口
+        val, aro = onnx.predict(spec3[np.newaxis, ...], de[np.newaxis, :])[0]
+        payload = {"valence": float(val), "arousal": float(aro), "timestamp": start / fs}
+
+        if args.compute_phi:
+            phi_in = pre_t[:8, :] if pre_t.shape[0] >= 8 else pre_t
+            phi_raw = float(phi_est.estimate_phi(phi_in))
+            # EMA 平滑（看起来更稳）
+            if phi_prev is None: phi_prev = phi_raw
+            phi = 0.2 * phi_raw + 0.8 * phi_prev
+            phi_prev = phi
+            payload["phi"] = float(phi)
+
+        try:
+            requests.post(args.broadcast_url, json=payload, timeout=1.0)
+        except Exception:
+            pass
+        print(json.dumps(payload), flush=True)
+
+    print(json.dumps({"type": "analysis_complete"}), flush=True)
+
+if __name__ == "__main__":
+    main()
+
+
+说明：.fif 先尝试 read_raw_fif，失败自动回退 read_epochs；CSV 会自动估计采样率并清 NaN/Inf。
+
+3) Python：ONNXRuntime 自动 GPU/CPU 回退
+
+文件：src/onnx_runner.py（关键片段）
+
+import onnxruntime as ort
+
+class ONNXRunner:
+    def __init__(self, model_path, use_gpu=True):
+        providers = []
+        if use_gpu:
+            providers.append("CUDAExecutionProvider")
+        providers.append("CPUExecutionProvider")
+        so = ort.SessionOptions(); so.intra_op_num_threads = 1
+        self.sess = ort.InferenceSession(model_path, sess_options=so, providers=providers)
+    # 其余保持不变
+
+4) 前端：放开上传类型 + Φ 开关接线
+
+文件：client/src/pages/home.tsx（关键处）
+
+- <input id="data-upload" type="file" accept=".set" multiple onChange={handleUpload} />
++ <input id="data-upload" type="file" accept=".set,.fif,.csv" multiple onChange={handleUpload} />
+
+// 启动分析时请求体（用 UI 状态而不是硬编码）
+const body = {
+  filename: selectedFile,
+  computePhi: enablePhi,      // 由 UI 复选框/单选控制
+  phiMethod: phiMethod        // 'Off' 时前端可直接传 computePhi=false
+};
+await fetch("/api/start-analysis", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+
+
+若你已做“离线/实时”模式切换，可把 mode 一起传给后端；本补丁先不强制。
+
+5) LSL：自动重连 + 重采样到 256 Hz
+
+文件：src/stream_xon.py（或你的实时脚本；新增或合并）
+
+import time, numpy as np, mne
+from pylsl import resolve_stream, StreamInlet
+
+def connect_eeg_stream(timeout=5):
+    while True:
+        streams = resolve_stream('type', 'EEG', timeout)
+        if streams:
+            inlet = StreamInlet(streams[0], max_buflen=60)
+            print(f"[LSL] Connected: {streams[0].name()}", flush=True)
+            return inlet
+        print("[LSL] Waiting EEG stream...", flush=True); time.sleep(1)
+
+def pull_and_resample(inlet, target_fs=256):
+    samples, ts = inlet.pull_chunk(timeout=0.5)
+    if not ts: return None
+    X = np.asarray(samples, dtype=float).T    # ch × t
+    t = np.asarray(ts, dtype=float)
+    if len(t) > 3:
+        dt = np.diff(t); good = np.isfinite(dt) & (dt > 0)
+        fs = int(round(1/np.median(dt[good]))) if good.any() else target_fs
+    else:
+        fs = target_fs
+    if fs != target_fs:
+        info = mne.create_info([f"CH{i+1}" for i in range(X.shape[0])], fs, "eeg")
+        raw = mne.io.RawArray(X, info)
+        raw = raw.resample(target_fs)
+        X = raw.get_data()
+    X[~np.isfinite(X)] = 0.0
+    return X
+
+
+你的广播逻辑不变：把 X 走原有预处理→特征→ONNX→广播即可。UI 侧建议在状态栏显示 LSL: Connected / Retrying…。
+
+6) 依赖与自检
+
+文件：requirements_prod.txt（新增或补全）
+
+numpy>=1.24,<2
+scipy>=1.10,<2
+mne>=1.6,<2
+pandas>=2,<3
+onnxruntime-gpu>=1.18,<2 ; platform_system!="Darwin"
+onnxruntime>=1.18,<2       ; platform_system=="Darwin"
+pylsl>=1.16,<2
+requests>=2.31,<3
+
+
+文件：tools/check_production.py（关键片段）
+
+required = ["numpy","scipy","mne","pandas","onnxruntime","pylsl","requests"]
+missing = []
+for m in required:
+    try:
+        __import__(m)
+    except Exception:
+        missing.append(m)
+print({"ok": len(missing)==0, "missing": missing})

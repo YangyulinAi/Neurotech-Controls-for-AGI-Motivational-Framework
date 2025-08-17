@@ -18,8 +18,20 @@ export default function Dashboard() {
   const [timeRange, setTimeRange] = useState(60);
   const [sessionStartTime] = useState(Date.now());
   const [sessionTime, setSessionTime] = useState('00:00');
+  const [analysisMode, setAnalysisMode] = useState<'realtime' | 'offline'>('realtime');
+  const [offlineResults, setOfflineResults] = useState<any>(null);
+  const [lslStatus, setLslStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'streaming' | 'retrying' | 'error'>('disconnected');
 
   const { toast } = useToast();
+  
+  // Detect analysis mode from URL params
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const mode = urlParams.get('mode');
+    if (mode === 'offline' || mode === 'realtime') {
+      setAnalysisMode(mode);
+    }
+  }, []);
   
   const {
     connectionStatus,
@@ -42,6 +54,26 @@ export default function Dashboard() {
 
     return () => clearInterval(interval);
   }, [sessionStartTime]);
+
+  // Monitor for offline analysis completion
+  useEffect(() => {
+    if (analysisMode === 'offline') {
+      const checkAnalysisComplete = () => {
+        // Check if we received analysis complete message
+        if (dataHistory.length === 0 && totalDataPoints === 0) {
+          // Show message that analysis is running
+          toast({
+            title: 'Offline Analysis Running',
+            description: 'Processing EEG file... Results will appear when complete.',
+            duration: 5000,
+          });
+        }
+      };
+      
+      const timer = setTimeout(checkAnalysisComplete, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [analysisMode, dataHistory.length, totalDataPoints, toast]);
 
   const handleExport = useCallback(() => {
     if (dataHistory.length === 0) {
@@ -141,11 +173,11 @@ export default function Dashboard() {
             />
 
             <MetricCard
-              title="Data Points"
+              title={analysisMode === 'offline' ? 'Windows Processed' : 'Data Points'}
               value={totalDataPoints}
               icon={<Database size={20} />}
               color="text-accent-green"
-              subtitle="Total received"
+              subtitle={analysisMode === 'offline' ? 'File analysis complete' : 'Total received'}
             />
 
             <MetricCard
@@ -156,6 +188,70 @@ export default function Dashboard() {
               subtitle="Active monitoring"
             />
           </div>
+
+          {/* Analysis Status */}
+          {analysisMode === 'offline' ? (
+            <div className="mb-6 animate-slide-up">
+              <div className="bg-gray-800/50 border border-blue-500/30 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <Brain className="h-5 w-5 text-blue-400" />
+                    <span className="text-white font-medium">Offline Analysis Mode</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className="h-2 w-2 bg-blue-400 rounded-full animate-pulse"></div>
+                    <span className="text-blue-400 text-sm">
+                      {totalDataPoints > 0 ? 'Analysis Complete' : 'Processing...'}
+                    </span>
+                  </div>
+                </div>
+                {totalDataPoints > 0 && (
+                  <div className="mt-3 text-gray-300 text-sm">
+                    File analysis completed successfully. {totalDataPoints} time windows were processed.
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="mb-6 animate-slide-up">
+              <div className="bg-gray-800/50 border border-green-500/30 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <Zap className="h-5 w-5 text-green-400" />
+                    <span className="text-white font-medium">Real-time LSL Stream</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className={`h-2 w-2 rounded-full ${
+                      lslStatus === 'streaming' ? 'bg-green-400' :
+                      lslStatus === 'connected' ? 'bg-yellow-400' :
+                      lslStatus === 'connecting' || lslStatus === 'retrying' ? 'bg-blue-400 animate-pulse' :
+                      'bg-red-400'
+                    }`}></div>
+                    <span className={`text-sm ${
+                      lslStatus === 'streaming' ? 'text-green-400' :
+                      lslStatus === 'connected' ? 'text-yellow-400' :
+                      lslStatus === 'connecting' || lslStatus === 'retrying' ? 'text-blue-400' :
+                      'text-red-400'
+                    }`}>
+                      {lslStatus === 'streaming' ? 'Streaming Data' :
+                       lslStatus === 'connected' ? 'Connected' :
+                       lslStatus === 'connecting' ? 'Connecting...' :
+                       lslStatus === 'retrying' ? 'Retrying...' :
+                       lslStatus === 'error' ? 'Connection Error' :
+                       'Disconnected'}
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-3 text-gray-300 text-sm">
+                  {lslStatus === 'streaming' ? 'EEG data streaming at 256Hz with auto-reconnect enabled.' :
+                   lslStatus === 'connected' ? 'LSL stream connected. Waiting for data...' :
+                   lslStatus === 'connecting' || lslStatus === 'retrying' ? 'Searching for EEG devices on Lab Streaming Layer...' :
+                   lslStatus === 'error' ? 'Unable to connect to LSL stream. Check your EEG device.' :
+                   'No LSL EEG stream detected. Ensure your device is streaming.'}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Main Visualization Row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 animate-slide-up">

@@ -1,0 +1,37 @@
+# Production Requirements for Neural Axis EEG Analysis Platform
+# Core scientific computing dependencies
+
+# Numerical computing and signal processing
+numpy>=1.24,<2
+scipy>=1.10,<2
+
+# EEG data handling and neuroscience
+mne>=1.6,<2
+pandas>=2,<3
+
+# Machine learning inference
+onnxruntime-gpu>=1.18,<2 ; platform_system!="Darwin"
+onnxruntime>=1.18,<2       ; platform_system=="Darwin"
+
+# Real-time streaming and communication
+pylsl>=1.16,<2
+requests>=2.31,<3
+websockets>=11.0,<12
+
+# Optional: Advanced consciousness measurement
+# pyphi>=1.2,<2              # Uncomment for full IIT Φ computation
+
+# Optional: Enhanced signal processing
+# pywavelets>=1.4,<2         # Wavelet transforms
+# scikit-learn>=1.3,<2       # Additional ML utilities
+
+# Development and debugging (optional in production)
+# matplotlib>=3.7,<4         # Plotting for analysis verification
+# seaborn>=0.12,<1           # Statistical plotting
+
+# Data format support
+h5py>=3.8,<4               # HDF5 support for some EEG formats
+pyedflib>=0.1.30,<1        # EDF file support
+
+# Performance optimization
+numba>=0.58,<1             # JIT compilation for performance critical code

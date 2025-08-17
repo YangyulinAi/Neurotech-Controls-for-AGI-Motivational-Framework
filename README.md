@@ -1,6 +1,6 @@
-# Neurotech-Controls-for-AGI-Motivational-Framework
+# Neural Axis BCI - Real-time EEG Emotion Recognition System
 
-**AGI Framework** is an advanced real-time Brain-Computer Interface (BCI) platform for emotion recognition that uses machine learning and deep learning technologies to provide precise, interactive biosignal analysis and visualization.
+**Neural Axis** is an advanced real-time Brain-Computer Interface (BCI) platform for emotion recognition that uses machine learning and deep learning technologies to provide precise, interactive biosignal analysis and visualization.
 
 ## Core Technology Features
 

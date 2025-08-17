@@ -3,7 +3,11 @@ export interface BciDataPoint {
   arousal: number;
   timestamp: number;
   phi?: number;  // IIT Φ (Integrated Information) value
+  type?: 'bci_data' | 'training_progress' | 'analysis_complete';
 }
+
+export type PhiMethod = 'off' | 'mock' | 'IIT3.0' | 'IIT4.0_light';
+export type AnalysisMode = 'offline' | 'live';
 
 export interface BciStatistics {
   mean: number;

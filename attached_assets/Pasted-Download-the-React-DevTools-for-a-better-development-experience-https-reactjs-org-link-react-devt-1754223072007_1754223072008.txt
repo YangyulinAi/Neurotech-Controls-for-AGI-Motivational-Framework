@@ -1,0 +1,24 @@
+Download the React DevTools for a better development experience: https://reactjs.org/link/react-devtools
+home.tsx:101 === Starting Analysis Debug ===
+home.tsx:102 Selected file: set/s2/s2_11.set
+home.tsx:103 Environment: Objecthost: "agi.deeps.net.cn"pathname: "/"protocol: "https:"[[Prototype]]: Object
+home.tsx:116 Sending analysis request: ObjectcomputePhi: truefilename: "set/s2/s2_11.set"phiMethod: "mock"[[Prototype]]: Object
+home.tsx:126 Analysis response status: 200
+home.tsx:127 Analysis response headers: Objectcontent-length: "169"content-security-policy: "default-src 'self' http: https: data: blob: 'unsafe-inline'; frame-ancestors 'self';"content-type: "application/json; charset=utf-8"date: "Sun, 03 Aug 2025 12:10:35 GMT"etag: "W/\"a9-8A8j3z9Wlw2zt1SFXJR4g8yTywY\""referrer-policy: "no-referrer-when-downgrade"server: "nginx/1.18.0 (Ubuntu)"x-content-type-options: "nosniff"x-frame-options: "SAMEORIGIN"x-powered-by: "Express"x-xss-protection: "1; mode=block"[[Prototype]]: Object
+home.tsx:131 === Analysis Started Successfully ===
+home.tsx:132 Analysis response data: ObjectcomputePhi: truefilename: "/opt/ProjectManager/data/training set/s2/s2_11.set"message: "Real-time analysis started"phiMethod: "mock"pid: 845434success: true[[Prototype]]: Object
+home.tsx:133 Analysis PID: 845434
+home.tsx:134 Analysis file path: /opt/ProjectManager/data/training set/s2/s2_11.set
+home.tsx:135 Phi computation enabled: true
+training-progress.tsx:35 Training progress WebSocket connected to wss://agi.deeps.net.cn/ws
+training-progress.tsx:41 Training progress component received data: Objectmessage: "Connected to BCI data stream"timestamp: "2025-08-03T12:10:36.690Z"type: "connection"[[Prototype]]: Object
+use-websocket.ts:65 === WebSocket Message Debug ===
+use-websocket.ts:66 Raw event data: {"type":"connection","message":"Connected to BCI data stream","timestamp":"2025-08-03T12:10:37.258Z"}
+use-websocket.ts:67 Parsed message: Objectmessage: "Connected to BCI data stream"timestamp: "2025-08-03T12:10:37.258Z"type: "connection"[[Prototype]]: Object
+use-websocket.ts:68 Message type: connection
+use-websocket.ts:69 Message keys: Array(3)0: "type"1: "message"2: "timestamp"length: 3[[Prototype]]: Array(0)
+use-websocket.ts:70 Current environment: Objecthost: "agi.deeps.net.cn"pathname: "/dashboard"protocol: "https:"[[Prototype]]: Object
+use-websocket.ts:78 === WebSocket Connection Message ===
+use-websocket.ts:79 Connection message: Connected to BCI data stream
+use-websocket.ts:80 Connection timestamp: 2025-08-03T12:10:37.258Z
+use-websocket.ts:81 Connection established successfully

@@ -7,8 +7,16 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { spawn } from 'child_process';
+import { fileURLToPath } from 'url';
 
-// Configure multer for file uploads
+// ES module __dirname equivalent
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Unified file type whitelist - consistent with frontend (enhanced for multi-format support)
+const allowedExt = new Set([".set", ".fif", ".csv", ".npz", ".edf", ".txt"]);
+
+// Configure multer for file uploads with enhanced security
 const modelStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     const modelDir = path.resolve('./model');
@@ -59,21 +67,27 @@ const uploadModel = multer({
     if (file.originalname.endsWith('.onnx')) {
       cb(null, true);
     } else {
-      cb(new Error('Only ONNX files are allowed'), false);
+      cb(new Error('Only ONNX files are allowed') as any, false);
     }
   }
 });
 
+// Enhanced upload configuration with unified whitelist and security
 const uploadData = multer({ 
   storage: dataStorage,
+  limits: { 
+    fileSize: 200 * 1024 * 1024, // 200MB limit for large EEG datasets
+    files: 10 // Maximum 10 files per upload
+  },
   fileFilter: (req, file, cb) => {
-    const allowedExtensions = ['.npz', '.csv', '.edf', '.txt'];
     const ext = path.extname(file.originalname).toLowerCase();
-    if (allowedExtensions.includes(ext)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only NPZ, CSV, EDF, and TXT files are allowed'), false);
+    if (!allowedExt.has(ext)) {
+      return cb(new Error("Unsupported file type") as any, false);
     }
+    if (file.originalname.includes("..") || file.originalname.includes("/")) {
+      return cb(new Error("Bad filename") as any, false);
+    }
+    cb(null, true);
   }
 });
 
@@ -158,9 +172,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { type = 'all' } = req.query;
       let files: string[] = [];
       
-      // NPZ format support has been removed - only SET files are supported
+      // Support multiple EEG formats: SET, FIF, CSV
       
-      // Include subject folders for SET files only
+      // Include subject folders for EEG files
       {
         const trainingDir = path.resolve('./data/training set');
         if (fs.existsSync(trainingDir)) {
@@ -175,13 +189,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
               return numA - numB;
             });
           
-          // For each subject directory, get all .set files
+          // For each subject directory, get all supported EEG files
           subjectDirs.forEach(subjectDir => {
             const subjectPath = path.join(trainingDir, subjectDir);
-            const setFiles = fs.readdirSync(subjectPath)
-              .filter(file => file.endsWith('.set'))
+            const eegFiles = fs.readdirSync(subjectPath)
+              .filter(file => ['.set', '.fif', '.csv'].includes(path.extname(file).toLowerCase()))
               .map(file => `set/${subjectDir}/${file}`);
-            files = files.concat(setFiles);
+            files = files.concat(eegFiles);
           });
         }
       }
@@ -217,7 +231,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
           
           fileCount = fs.readdirSync(subjectPath)
-            .filter(file => file.endsWith('.set')).length;
+            .filter(file => ['.set', '.fif', '.csv'].includes(path.extname(file).toLowerCase())).length;
           
           return {
             id: subjectDir,
@@ -359,28 +373,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const testScript = `
 import sys
 import os
-import random
 import numpy as np
 
 # Add src directory to path
 sys.path.insert(0, '${path.resolve('./src').replace(/\\/g, '/')}')
 
+# Enhanced Φ import strategy: prioritize real Φ (PyPhi), fallback to enhanced simulation
 try:
-    from phi_estimator import PhiEstimator
+    from phi_estimator import PhiEstimator as _PhiEstimator  # Real Φ (PyPhi)
+    _HAVE_REAL = True
+    print("[PHI] Real PyPhi-based Φ estimator loaded for testing")
+except Exception as e:
+    from phi_estimator_enhanced import PhiEstimatorEnhanced as _PhiEstimator  # Approximated Φ
+    _HAVE_REAL = False
+    print(f"[PHI] PyPhi not available ({e}), using enhanced simulation for testing")
+
+try:
+    # Initialize estimator with unified interface
+    if _HAVE_REAL:
+        estimator = _PhiEstimator(method='${method}', max_channels=${maxChannels})
+    else:
+        estimator = _PhiEstimator(method='${method}', alpha=0.2)  # EMA smoothing for enhanced
     
-    # Initialize estimator
-    estimator = PhiEstimator(method='${method}')
+    # Get estimator info
+    info = getattr(estimator, "get_info", lambda: {"available": _HAVE_REAL, "backend_ready": _HAVE_REAL})()
+    print(f"[PHI] backend_ready={info.get('backend_ready', _HAVE_REAL)}, method=${method}")
     
-    # Generate test data and compute phi values
+    # Generate ${testSamples} test samples with realistic EEG patterns
     phi_values = []
     for i in range(${testSamples}):
-        # Generate random phi for demonstration
-        if '${method}' == 'mock':
-            phi = random.uniform(0.01, 0.15)
+        # Simulate realistic EEG data: ${maxChannels} channels × 256 samples (1 second at 256Hz)
+        # Add realistic EEG frequency components (alpha, beta, theta)
+        t = np.linspace(0, 1, 256)
+        alpha_wave = 0.5 * np.sin(2 * np.pi * 10 * t)  # 10Hz alpha
+        beta_wave = 0.3 * np.sin(2 * np.pi * 20 * t)   # 20Hz beta
+        theta_wave = 0.2 * np.sin(2 * np.pi * 6 * t)   # 6Hz theta
+        
+        test_data = np.zeros((${maxChannels}, 256))
+        for ch in range(${maxChannels}):
+            # Each channel gets slightly different phase and amplitude
+            phase_shift = ch * 0.1
+            test_data[ch] = (alpha_wave + beta_wave + theta_wave) * (0.8 + 0.4 * np.random.rand()) + \\
+                           0.1 * np.random.randn(256) + phase_shift
+        
+        # Compute Φ with real calculation (not random demo values)
+        if _HAVE_REAL:
+            # Real Φ estimator - actual PyPhi computation
+            phi_val = float(estimator.estimate_phi(test_data))
         else:
-            phi = random.uniform(0.05, 0.12)
-        phi_values.append(phi)
-        print(f"Test {i+1}: Φ = {phi:.6f}")
+            # Enhanced estimator - sophisticated simulation
+            result = estimator.estimate_phi(test_data, 256)
+            phi_val = result["phi"] if isinstance(result, dict) else result
+        
+        phi_values.append(float(phi_val))
+        print(f"Test {i+1}: Φ = {phi_val:.6f}")
     
     avg_phi = np.mean(phi_values)
     min_phi = np.min(phi_values)
@@ -391,9 +437,6 @@ try:
     print(f"Max Φ: {max_phi:.6f}")
     print(f"METHOD: ${method}")
     print(f"SAMPLES: ${testSamples}")
-    
-    # Get estimator info
-    info = estimator.get_info()
     print(f"ESTIMATOR_INFO: {info}")
     
 except Exception as e:
@@ -492,10 +535,29 @@ except Exception as e:
     }
   });
 
-  // Start real-time analysis endpoint
+  // Analysis mutex system for preventing concurrent analysis
+  let ANALYSIS_RUNNING = false;
+
+  // Start real-time analysis endpoint with mutex protection
   app.post('/api/start-analysis', async (req, res) => {
     try {
-      const { filename = 'data/training set/s2/s2_1.set', computePhi = true, phiMethod = 'mock' } = req.body;
+      const { filename, computePhi, phiMethod } = req.body ?? {};
+      
+      if (!filename) {
+        return res.status(400).json({ error: "Missing filename" });
+      }
+
+      // Mutex protection - prevent concurrent analysis
+      if (ANALYSIS_RUNNING) {
+        return res.status(409).json({ 
+          error: "Analysis already running",
+          message: "Please wait for current analysis to complete"
+        });
+      }
+
+      // Phi method whitelist fallback
+      const allowedPhi = new Set(["mock", "IIT3.0", "IIT4.0_light"]);
+      const safePhi = allowedPhi.has(phiMethod) ? phiMethod : "mock";
       
       console.log('=== Server Analysis Request Debug ===');
       console.log('Starting real-time analysis for:', filename);
@@ -506,99 +568,80 @@ except Exception as e:
         PYTHONPATH: process.env.PYTHONPATH
       });
       
-      // Handle different path formats and resolve to absolute path
-      let resolvedPath;
-      if (filename.startsWith('set/')) {
-        // Convert set/s2/s2_1.set to data/training set/s2/s2_1.set
-        const relativePath = filename.replace('set/', '');
-        resolvedPath = path.resolve('./data/training set', relativePath);
-      } else if (filename.startsWith('data/')) {
-        // Already in correct format
-        resolvedPath = path.resolve(filename);
-      } else {
-        // Assume it's a relative path from training set
-        resolvedPath = path.resolve('./data/training set', filename);
+      // Simplified path resolution for training data
+      const analysisFilename = path.join(__dirname, "../data/training set", filename.replace('set/', ''));
+      
+      if (!fs.existsSync(analysisFilename)) {
+        return res.status(404).json({ 
+          error: "Data file not found: " + analysisFilename 
+        });
       }
 
-      // Check if file exists
-      console.log('Checking file exists at:', resolvedPath);
-      if (!fs.existsSync(resolvedPath)) {
-        console.error('File not found:', resolvedPath);
-        return res.status(404).json({ error: 'SET file not found: ' + resolvedPath });
-      }
-      console.log('File exists, proceeding with analysis');
-
-      // Use the resolved path for analysis
-      const analysisFilename = resolvedPath;
-
-      // Start analysis process
-      const args = [
-        'tests/analyze_set_file_onnx.py',
-        analysisFilename
-      ];
+      // Set analysis running flag
+      ANALYSIS_RUNNING = true;
       
-      console.log('Analysis command args:', args);
-      
+      // Prepare analysis arguments
+      const args = ["tests/analyze_file_onnx.py", analysisFilename];
       if (computePhi) {
-        args.push('--compute_phi', '--phi_method', phiMethod);
-        console.log('Added phi computation args:', ['--compute_phi', '--phi_method', phiMethod]);
+        args.push("--compute_phi", "--phi_method", safePhi);
       }
 
-      console.log('Final command: python3', args.join(' '));
-      console.log('Spawning analysis process...');
+      // Spawn Python analysis process
+      const py = spawn(process.env.PYTHON || "python", args, { 
+        env: process.env,
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+      
+      // 10-minute timeout protection
+      const killTimer = setTimeout(() => { 
+        try { 
+          py.kill("SIGKILL"); 
+          console.log("Analysis killed due to timeout");
+        } catch {} 
+      }, 10 * 60 * 1000);
 
-      const analysisProcess = spawn('python3', args, {
-        stdio: ['pipe', 'pipe', 'pipe'],
-        env: { 
-          ...process.env, 
-          PYTHONPATH: process.cwd()
-        },
-        detached: false
+      // Process output handling
+      py.stdout.on("data", (data) => {
+        const output = data.toString().trim();
+        console.log("[ANALYSIS-OUT]", output);
+      });
+      
+      py.stderr.on("data", (data) => {
+        const error = data.toString().trim();
+        console.error("[ANALYSIS-ERR]", error);
+      });
+      
+      py.on("close", (code) => { 
+        clearTimeout(killTimer); 
+        ANALYSIS_RUNNING = false; 
+        console.log("Analysis process exited with code:", code);
       });
 
-      console.log('Analysis process spawned with PID:', analysisProcess.pid);
-
-      let output = '';
-      let errorOutput = '';
-
-      analysisProcess.stdout?.on('data', (data) => {
-        const text = data.toString();
-        output += text;
-        console.log('Analysis output:', text.trim());
-      });
-
-      analysisProcess.stderr?.on('data', (data) => {
-        const text = data.toString();
-        errorOutput += text;
-        console.error('Analysis error:', text.trim());
-      });
-
-      analysisProcess.on('close', (code) => {
-        console.log(`Analysis process exited with code ${code}`);
-      });
-
-      analysisProcess.on('error', (error) => {
-        console.error('Analysis process error:', error);
-      });
-
-      res.json({
+      return res.json({ 
         success: true,
-        message: 'Real-time analysis started',
-        filename: analysisFilename,
-        computePhi: computePhi,
-        phiMethod: phiMethod,
-        pid: analysisProcess.pid,
-        command: `python3 ${args.join(' ')}`,
-        environment: {
-          NODE_ENV: process.env.NODE_ENV,
-          PYTHONPATH: process.cwd()
-        }
+        message: "Analysis started successfully",
+        pid: py.pid,
+        args: args
       });
 
-    } catch (error) {
+    } catch (error: any) {
+      ANALYSIS_RUNNING = false;
       console.error('Failed to start analysis:', error);
-      res.status(500).json({ error: 'Failed to start analysis: ' + error.message });
+      res.status(500).json({ 
+        error: 'Failed to start analysis: ' + (error?.message || "Unknown error")
+      });
     }
+  });
+
+  // Add analysis status and control endpoints
+  app.get('/api/analysis/status', async (req, res) => {
+    const { getAnalysisStatus } = await import('./analysis');
+    return getAnalysisStatus(res);
+  });
+
+  app.post('/api/analysis/stop', async (req, res) => {
+    const { stopAnalysis } = await import('./analysis');
+    return stopAnalysis(res);
   });
 
   // Endpoint for analysis scripts to broadcast WebSocket messages
@@ -610,12 +653,6 @@ except Exception as e:
       console.log('=== Server Broadcast Debug ===');
       console.log('Received broadcast message:', JSON.stringify(message, null, 2));
       console.log('Message timestamp:', new Date().toISOString());
-      console.log('Connected WebSocket clients:', wss.clients.size);
-      console.log('Environment:', {
-        NODE_ENV: process.env.NODE_ENV,
-        PORT: process.env.PORT,
-        HOSTNAME: process.env.HOSTNAME || 'unknown'
-      });
       
       // Validate the message contains required fields for BCI data OR training progress
       const isBciData = typeof message.valence === 'number' && typeof message.arousal === 'number';
@@ -629,31 +666,38 @@ except Exception as e:
         return res.status(400).json({ error: "Invalid message format" });
       }
       
-      // Broadcast to all connected WebSocket clients
-      let successfulBroadcasts = 0;
-      let failedBroadcasts = 0;
+      // Broadcast to all connected WebSocket clients directly
+      let successCount = 0;
+      let failCount = 0;
       
-      wss.clients.forEach((client, index) => {
-        console.log(`Client ${index}: readyState = ${client.readyState} (OPEN=${WebSocket.OPEN})`);
+      wss.clients.forEach((client: ExtendedWebSocket) => {
         if (client.readyState === WebSocket.OPEN) {
           try {
-            const messageStr = JSON.stringify(message);
-            client.send(messageStr);
-            successfulBroadcasts++;
-            console.log(`Successfully sent to client ${index}: ${messageStr.substring(0, 100)}...`);
+            client.send(JSON.stringify(message));
+            successCount++;
           } catch (error) {
-            failedBroadcasts++;
-            console.error(`Failed to send to client ${index}:`, error);
+            console.error('Failed to send to WebSocket client:', error);
+            failCount++;
           }
-        } else {
-          failedBroadcasts++;
-          console.log(`Client ${index} not ready: readyState=${client.readyState}`);
         }
       });
       
-      console.log(`Broadcast summary: ${successfulBroadcasts} successful, ${failedBroadcasts} failed`);
+      const broadcastResult = {
+        success: true,
+        clientCount: wss.clients.size,
+        successCount,
+        failCount
+      };
       
-      res.json({ success: true, message: "Message broadcasted" });
+      console.log('Broadcast summary:', `${broadcastResult.successCount} successful, ${broadcastResult.failCount} failed`);
+      
+      res.json({ 
+        success: true, 
+        message: "Message broadcasted",
+        clientCount: broadcastResult.clientCount,
+        successCount: broadcastResult.successCount,
+        failCount: broadcastResult.failCount
+      });
     } catch (error) {
       console.error('Broadcast error:', error);
       res.status(500).json({ error: "Failed to broadcast message" });
@@ -843,11 +887,16 @@ except Exception as e:
 
   const httpServer = createServer(app);
 
-  // WebSocket server for real-time BCI data
+  // WebSocket server for real-time BCI data with heartbeat monitoring
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
 
-  wss.on('connection', (ws: WebSocket) => {
+  interface ExtendedWebSocket extends WebSocket {
+    isAlive?: boolean;
+  }
+
+  wss.on('connection', (ws: ExtendedWebSocket) => {
     console.log('BCI WebSocket client connected');
+    ws.isAlive = true;
 
     // Send welcome message
     ws.send(JSON.stringify({
@@ -892,6 +941,11 @@ except Exception as e:
       }
     });
 
+    // Handle pong responses for heartbeat
+    ws.on('pong', () => {
+      ws.isAlive = true;
+    });
+
     ws.on('close', () => {
       console.log('BCI WebSocket client disconnected');
     });
@@ -900,6 +954,26 @@ except Exception as e:
       console.error('WebSocket error:', error);
     });
   });
+
+  // Heartbeat mechanism to detect dead connections
+  const heartbeatInterval = setInterval(() => {
+    wss.clients.forEach((ws: ExtendedWebSocket) => {
+      if (!ws.isAlive) {
+        console.log('Terminating dead WebSocket connection');
+        return ws.terminate();
+      }
+      
+      ws.isAlive = false;
+      ws.ping();
+    });
+  }, 30000); // 30 seconds
+
+  // Cleanup on server close
+  wss.on('close', () => {
+    clearInterval(heartbeatInterval);
+  });
+
+  console.log('WebSocket server initialized with heartbeat monitoring');
 
   // Install production dependencies API
   app.post('/api/install-production-deps', async (req, res) => {

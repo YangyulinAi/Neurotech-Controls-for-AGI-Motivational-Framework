@@ -1,0 +1,9 @@
+{
+  "source_file": "data/test_multi_format.npz",
+  "total_windows": 3,
+  "avg_valence": 0.0,
+  "avg_arousal": 0.0,
+  "analysis_timestamp": 1755420246.8975618,
+  "phi_enabled": false,
+  "phi_method": null
+}
