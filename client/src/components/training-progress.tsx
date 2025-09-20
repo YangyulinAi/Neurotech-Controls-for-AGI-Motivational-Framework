@@ -152,7 +152,7 @@ export function TrainingProgress({ onTrainingData }: TrainingProgressProps) {
             {/* IIT Φ Value */}
             {trainingData.phi !== undefined && (
               <div className="text-center border-t pt-4">
-                <div className="text-sm text-muted-foreground mb-1">IIT Φ (Consciousness)</div>
+                <div className="text-sm text-muted-foreground mb-1">IIT Φ</div>
                 <div className="text-sm font-mono text-cyan-600">
                   {trainingData.phi.toFixed(6)}
                 </div>

@@ -19,7 +19,7 @@ const allowedExt = new Set([".set", ".fif", ".csv", ".npz", ".edf", ".txt"]);
 // Configure multer for file uploads with enhanced security
 const modelStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const modelDir = path.resolve('./model');
+    const modelDir = path.resolve('./model/model_onnx');
     if (!fs.existsSync(modelDir)) {
       fs.mkdirSync(modelDir, { recursive: true });
     }
@@ -258,7 +258,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Production environment diagnostic endpoints
   app.get('/api/diagnostic/production-check', (req, res) => {
     try {
-      const diagnosticPath = path.resolve('./tools/check_production.py');
+      const diagnosticPath = path.resolve('./scripts/tools/check_production.py');
       
       if (!fs.existsSync(diagnosticPath)) {
         return res.status(404).json({ error: 'Production check script not found' });
@@ -307,7 +307,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/diagnostic/backend-test', (req, res) => {
     try {
-      const testPath = path.resolve('./tools/test_backend.py');
+      const testPath = path.resolve('./scripts/tools/test_backend.py');
       
       if (!fs.existsSync(testPath)) {
         return res.status(404).json({ error: 'Backend test script not found' });
@@ -362,7 +362,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('Starting Φ test: method=' + method + ', channels=' + maxChannels + ', samples=' + testSamples);
       
       // Check if phi_estimator.py exists
-      const testPath = path.resolve('./src/phi_estimator.py');
+      const testPath = path.resolve('./scripts/phi_estimator.py');
       
       if (!fs.existsSync(testPath)) {
         console.log('Φ estimator not found at:', testPath);
@@ -375,8 +375,8 @@ import sys
 import os
 import numpy as np
 
-# Add src directory to path
-sys.path.insert(0, '${path.resolve('./src').replace(/\\/g, '/')}')
+# Add scripts directory to path
+sys.path.insert(0, '${path.resolve('./scripts').replace(/\\/g, '/')}')
 
 # Enhanced Φ import strategy: prioritize real Φ (PyPhi), fallback to enhanced simulation
 try:
@@ -449,7 +449,7 @@ except Exception as e:
         stdio: ['pipe', 'pipe', 'pipe'],
         env: { 
           ...process.env, 
-          PYTHONPATH: path.resolve('./src')
+          PYTHONPATH: path.resolve('./scripts')
         }
       });
 
@@ -538,15 +538,11 @@ except Exception as e:
   // Analysis mutex system for preventing concurrent analysis
   let ANALYSIS_RUNNING = false;
 
-  // Start real-time analysis endpoint with mutex protection
+  // Start analysis endpoint with mode support (offline/live)
   app.post('/api/start-analysis', async (req, res) => {
     try {
-      const { filename, computePhi, phiMethod } = req.body ?? {};
+      const { filename, computePhi, phiMethod, outputInterval, mode } = req.body ?? {};
       
-      if (!filename) {
-        return res.status(400).json({ error: "Missing filename" });
-      }
-
       // Mutex protection - prevent concurrent analysis
       if (ANALYSIS_RUNNING) {
         return res.status(409).json({ 
@@ -560,30 +556,58 @@ except Exception as e:
       const safePhi = allowedPhi.has(phiMethod) ? phiMethod : "mock";
       
       console.log('=== Server Analysis Request Debug ===');
-      console.log('Starting real-time analysis for:', filename);
+      console.log('Analysis mode:', mode);
       console.log('Request body full:', req.body);
       console.log('Server environment:', {
         NODE_ENV: process.env.NODE_ENV,
         CWD: process.cwd(),
         PYTHONPATH: process.env.PYTHONPATH
       });
-      
-      // Simplified path resolution for training data
-      const analysisFilename = path.join(__dirname, "../data/training set", filename.replace('set/', ''));
-      
-      if (!fs.existsSync(analysisFilename)) {
-        return res.status(404).json({ 
-          error: "Data file not found: " + analysisFilename 
-        });
-      }
 
       // Set analysis running flag
       ANALYSIS_RUNNING = true;
       
-      // Prepare analysis arguments
-      const args = ["tests/analyze_file_onnx.py", analysisFilename];
-      if (computePhi) {
-        args.push("--compute_phi", "--phi_method", safePhi);
+      let args: string[] = [];
+      
+      // Choose script based on analysis mode
+      if (mode === "live") {
+        // Real-time EEG device connection
+        console.log('Starting live EEG device analysis...');
+        args = ["scripts/main.py"];
+        
+        // For live mode, we don't need a filename - it connects to EEG devices via LSL
+        if (computePhi) {
+          // Pass phi options via environment variables for main.py
+          process.env.COMPUTE_PHI = "true";
+          process.env.PHI_METHOD = safePhi;
+        }
+      } else {
+        // Offline file analysis mode
+        if (!filename) {
+          ANALYSIS_RUNNING = false;
+          return res.status(400).json({ error: "Missing filename for offline analysis" });
+        }
+
+        console.log('Starting offline file analysis for:', filename);
+        
+        // Simplified path resolution for training data
+        const analysisFilename = path.join(__dirname, "../data/training set", filename.replace('set/', ''));
+        
+        if (!fs.existsSync(analysisFilename)) {
+          ANALYSIS_RUNNING = false;
+          return res.status(404).json({ 
+            error: "Data file not found: " + analysisFilename 
+          });
+        }
+
+        args = ["scripts/tests/analyze_file_onnx.py", analysisFilename];
+        if (computePhi) {
+          args.push("--compute_phi", "--phi_method", safePhi);
+        }
+        
+        // Add output interval if specified (default to 0.1s for real-time feel)
+        const interval = outputInterval && outputInterval > 0 ? outputInterval : 0.1;
+        args.push("--output_interval", interval.toString());
       }
 
       // Spawn Python analysis process
@@ -767,7 +791,7 @@ except Exception as e:
       console.log(`Dataset type: ${datasetType}, Batch size: ${batchSize}, LR: ${learningRate}`);
 
       // Use the new labeled training script for subject-based training
-      const trainingScript = 'train/train_labeled.py';
+      const trainingScript = 'scripts/train/train_labeled.py';
       
       // Build training arguments
       const trainingArgs = [
@@ -791,18 +815,31 @@ except Exception as e:
         const output = data.toString();
         console.log('Training output:', output);
         
-        // Parse progress from output (e.g., "E5/30 loss=0.1234")
+        // Parse progress from output (e.g., "E5/30 loss=0.1234" or "E5/30 Batch 10/86 loss=0.1234")
         const progressMatch = output.match(/E(\d+)\/(\d+)/);
         if (progressMatch) {
           const currentEpoch = parseInt(progressMatch[1]);
           const totalEpochs = parseInt(progressMatch[2]);
-          trainingStatus.progress = (currentEpoch / totalEpochs) * 100;
+          const calculatedProgress = (currentEpoch / totalEpochs) * 100;
+          trainingStatus.progress = Math.round(calculatedProgress * 100) / 100; // Round to 2 decimal places
+          console.log(`Progress updated: ${currentEpoch}/${totalEpochs} = ${trainingStatus.progress}%`);
         }
 
-        // Parse loss from output
+        // Parse loss from output (handles both "loss=0.1234" and "loss=0.1234 time=14.8s")
         const lossMatch = output.match(/loss=([\d.]+)/);
         if (lossMatch) {
-          trainingStatus.bestLoss = parseFloat(lossMatch[1]);
+          const currentLoss = parseFloat(lossMatch[1]);
+          // Only update best loss if it's better (lower)
+          if (trainingStatus.bestLoss === null || currentLoss < trainingStatus.bestLoss) {
+            trainingStatus.bestLoss = currentLoss;
+            console.log(`Best loss updated: ${trainingStatus.bestLoss}`);
+          }
+        }
+
+        // Parse completion status
+        if (output.includes('Training completed') || output.includes('ONNX exported')) {
+          trainingStatus.progress = 100;
+          console.log('Training completion detected, progress set to 100%');
         }
       });
 
@@ -815,33 +852,64 @@ except Exception as e:
         console.log(`Training process exited with code ${code}`);
         
         if (code === 0) {
-          // Training completed successfully, now export to ONNX
-          console.log('Exporting model to ONNX...');
+          // Check if ONNX model was already exported by training script
+          const modelPath = 'model/model_onnx/va_regressor.onnx';
+          const trainModelPath = 'model/model_onnx/va_regressor_temp.onnx';
           
-          const exportProcess = spawn('python', [
-            'train/export_onnx.py',
-            '--ckpt', 'model_training/ckpt.pt',
-            '--out', 'model/va_regressor_new.onnx'
-          ], {
-            stdio: 'pipe',
-            detached: false
-          });
+          if (fs.existsSync(trainModelPath)) {
+            // Training script already exported the model, just copy it to the correct location
+            console.log('ONNX model already exported by training script, deploying...');
+            try {
+              // Backup old model if it exists
+              const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+              const backupName = `va_regressor_backup_${timestamp}.onnx`;
+              
+              if (fs.existsSync(modelPath)) {
+                fs.renameSync(modelPath, `model/model_onnx/${backupName}`);
+                console.log(`Old model backed up as ${backupName}`);
+              }
+              
+              // Copy new model from training directory
+              fs.copyFileSync(trainModelPath, modelPath);
+              console.log('New model deployed successfully from training script output');
+              
+              trainingStatus.completed = true;
+              trainingStatus.isTraining = false;
+              trainingStatus.progress = 100;
+              trainingStatus.error = null;
+              
+            } catch (error) {
+              console.error('Error deploying new model:', error);
+              trainingStatus.error = `Failed to deploy new model: ${error}`;
+              trainingStatus.isTraining = false;
+            }
+          } else {
+            // Training script didn't export, try separate export process
+            console.log('Training script did not export ONNX, running separate export...');
+            const exportProcess = spawn('python', [
+              'scripts/tools/export_onnx.py',
+              '--ckpt', 'model/model_weight/ckpt.pt',
+              '--out', 'model/model_onnx/va_regressor_new.onnx'
+            ], {
+              stdio: 'pipe',
+              detached: false
+            });
 
-          exportProcess.on('close', async (exportCode) => {
-            if (exportCode === 0) {
-              // Backup old model and replace with new one
+            exportProcess.on('close', async (exportCode) => {
+              if (exportCode === 0) {
+                // Backup old model and replace with new one
               try {
                 const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
                 const backupName = `va_regressor_backup_${timestamp}.onnx`;
                 
                 // Backup old model
-                if (fs.existsSync('model/va_regressor.onnx')) {
-                  fs.renameSync('model/va_regressor.onnx', `model/${backupName}`);
+                if (fs.existsSync('model/model_onnx/va_regressor.onnx')) {
+                  fs.renameSync('model/model_onnx/va_regressor.onnx', `model/model_onnx/${backupName}`);
                   console.log(`Old model backed up as ${backupName}`);
                 }
                 
                 // Replace with new model
-                fs.renameSync('model/va_regressor_new.onnx', 'model/va_regressor.onnx');
+                fs.renameSync('model/model_onnx/va_regressor_new.onnx', 'model/model_onnx/va_regressor.onnx');
                 console.log('New model deployed successfully');
                 
                 trainingStatus.completed = true;
@@ -856,7 +924,8 @@ except Exception as e:
               trainingStatus.error = 'Failed to export model to ONNX';
               trainingStatus.isTraining = false;
             }
-          });
+            });
+          }
         } else {
           trainingStatus.error = `Training failed with exit code ${code}`;
           trainingStatus.isTraining = false;

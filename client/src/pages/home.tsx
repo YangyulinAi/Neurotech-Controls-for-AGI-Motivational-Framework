@@ -30,9 +30,9 @@ export default function Home() {
   const [learningRate, setLearningRate] = useState(0.0001);
   const [windowSize, setWindowSize] = useState(5.0);
   const [overlap, setOverlap] = useState(0.5);
+  const [outputInterval, setOutputInterval] = useState(0.1);
   
   // Enhanced Φ controls and analysis mode
-  const [showPhiInterface, setShowPhiInterface] = useState(false);
   const [phiMethod, setPhiMethod] = useState<PhiMethod>('off');
   const [analysisMode, setAnalysisMode] = useState<AnalysisMode>('offline');
   const [phiMaxChannels, setPhiMaxChannels] = useState(8);
@@ -118,6 +118,7 @@ export default function Home() {
         filename,
         computePhi: phiMethod !== 'off',
         phiMethod: phiMethod === 'off' ? 'mock' : phiMethod,
+        outputInterval: outputInterval,
         mode: 'offline'  // 强制设置为离线模式，因为这是文件分析
       };
       
@@ -171,7 +172,7 @@ export default function Home() {
       console.error('Error starting analysis:', error);
       toast({
         title: 'Connection Error',
-        description: `Failed to start analysis: ${error.message}`,
+        description: `Failed to start analysis: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: 'destructive',
       });
     }
@@ -381,39 +382,6 @@ export default function Home() {
     setSelectedTrainingFiles([]);
   };
 
-  // IIT Φ quick test function
-  const handlePhiQuickTest = async () => {
-    try {
-      const response = await fetch('/api/test-phi', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          method: phiMethod,
-          maxChannels: phiMaxChannels,
-          testSamples: 4
-        })
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        toast({
-          title: '✓ IIT Φ Test Completed',
-          description: `Method: ${phiMethod}, Average Φ: ${result.avgPhi?.toFixed(6) || '0.000000'}`,
-          duration: 6000,
-        });
-      } else {
-        throw new Error('Φ test failed');
-      }
-    } catch (error) {
-      toast({
-        title: 'Φ Test Failed',
-        description: 'Please check if backend service is running properly',
-        variant: 'destructive',
-      });
-    }
-  };
 
 
 
@@ -601,27 +569,6 @@ export default function Home() {
             </CardContent>
           </Card>
 
-          {/* IIT Φ 计算功能 */}
-          <Card className="bg-gray-800 border-gray-700 hover:bg-gray-750 transition-colors cursor-pointer group">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="h-8 w-8 text-cyan-400 group-hover:text-cyan-300 transition-colors">🧮</div>
-                <Badge className="bg-cyan-600/20 text-cyan-300 border-cyan-500/50">IIT Φ</Badge>
-              </div>
-              <CardTitle className="text-white">Consciousness Analysis</CardTitle>
-              <CardDescription className="text-gray-400">
-                Test IIT Φ (consciousness complexity) calculation with multiple algorithms and configuration options
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button 
-                onClick={() => setShowPhiInterface(true)}
-                className="w-full bg-cyan-600 hover:bg-cyan-700"
-              >
-                🧠 Test Φ Calculation
-              </Button>
-            </CardContent>
-          </Card>
 
           {/* Production Debug */}
           <Card className="bg-gray-800 border-gray-700 hover:bg-gray-750 transition-colors cursor-pointer group">
@@ -905,6 +852,19 @@ export default function Home() {
                             className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-sm w-20 focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                           />
                         </div>
+                        
+                        <div className="flex items-center space-x-2">
+                          <label className="text-sm text-gray-400 w-16">Output:</label>
+                          <select
+                            value={outputInterval}
+                            onChange={(e) => setOutputInterval(Number(e.target.value))}
+                            className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-sm w-16 focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                          >
+                            <option value={0.1}>0.1s</option>
+                            <option value={0.5}>0.5s</option>
+                            <option value={1.0}>1.0s</option>
+                          </select>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -1147,113 +1107,6 @@ export default function Home() {
         </DialogContent>
       </Dialog>
 
-      {/* IIT Φ Test Dialog */}
-      <Dialog open={showPhiInterface} onOpenChange={setShowPhiInterface}>
-        <DialogContent className="bg-gray-800 border-gray-700 text-white max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              🧮 IIT Φ Consciousness Complexity Test
-            </DialogTitle>
-            <DialogDescription className="text-gray-400">
-              Test Integrated Information Theory (IIT) Φ calculation functionality, select algorithms and parameters to analyze consciousness complexity
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-6">
-            {/* Calculation Method Selection */}
-            <div className="space-y-2">
-              <Label className="text-gray-300">Calculation Method</Label>
-              <Select value={phiMethod} onValueChange={(value: PhiMethod) => setPhiMethod(value)}>
-                <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="off">Disabled</SelectItem>
-                  <SelectItem value="mock">Mock (Placeholder Mode)</SelectItem>
-                  <SelectItem value="IIT3.0">IIT 3.0 (Standard Algorithm)</SelectItem>
-                  <SelectItem value="IIT4.0_light">IIT 4.0 Light (Lightweight)</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-gray-500">
-                {phiMethod === 'mock' && 'Returns fixed value 0, for testing integration'}
-                {phiMethod === 'IIT3.0' && 'Standard IIT algorithm, computationally intensive, recommend fewer channels'}
-                {phiMethod === 'IIT4.0_light' && 'Lightweight approximation algorithm, suitable for real-time computation'}
-              </p>
-            </div>
-
-            {/* Maximum Channels */}
-            <div className="space-y-2">
-              <Label className="text-gray-300">Maximum Channels</Label>
-              <Select value={phiMaxChannels.toString()} onValueChange={(value) => setPhiMaxChannels(parseInt(value))}>
-                <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="4">4 Channels (Fast)</SelectItem>
-                  <SelectItem value="6">6 Channels (Balanced)</SelectItem>
-                  <SelectItem value="8">8 Channels (Standard)</SelectItem>
-                  <SelectItem value="12">12 Channels (Slow)</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-gray-500">
-                More channels increase computation time, IIT 3.0 recommended max 8 channels
-              </p>
-            </div>
-
-            {/* Phi Method Status */}
-            <div className="flex items-center space-x-2">
-              <div className="text-sm text-gray-400">
-                Current Phi Mode: <span className="text-cyan-400 font-medium">{phiMethod === 'off' ? 'Disabled' : phiMethod}</span>
-              </div>
-            </div>
-
-            {/* Information */}
-            <div className="bg-gray-900/50 border border-gray-600 rounded-lg p-4">
-              <h4 className="text-sm font-medium text-cyan-400 mb-2">💡 Feature Information</h4>
-              <ul className="text-xs text-gray-400 space-y-1">
-                <li>• Mock mode: No performance impact, returns 0 value</li>
-                <li>• IIT 3.0: Requires PyPhi library, accurate but time-consuming</li>
-                <li>• IIT 4.0: Lightweight algorithm, suitable for real-time analysis</li>
-                <li>• When enabled, training progress will display real-time Φ values</li>
-              </ul>
-            </div>
-
-            {/* Button Group */}
-            <div className="flex justify-between pt-4">
-              <Button 
-                variant="outline" 
-                onClick={() => setShowPhiInterface(false)}
-                className="border-gray-600 text-gray-300 hover:bg-gray-700"
-              >
-                Cancel
-              </Button>
-              <div className="space-x-2">
-                <Button 
-                  onClick={handlePhiQuickTest}
-                  className="bg-cyan-600 hover:bg-cyan-700"
-                >
-                  🧪 Quick Test
-                </Button>
-                <Button 
-                  onClick={() => {
-                    setShowPhiInterface(false);
-                    toast({
-                      title: '✓ Φ Calculation Config Saved',
-                      description: phiMethod !== 'off' ? 
-                        `Phi method set to ${phiMethod} for analysis` : 
-                        'Φ calculation disabled',
-                      duration: 4000,
-                    });
-                  }}
-                  className="bg-green-600 hover:bg-green-700"
-                >
-                  💾 Save Config
-                </Button>
-              </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

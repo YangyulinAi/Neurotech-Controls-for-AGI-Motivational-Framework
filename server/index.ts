@@ -113,7 +113,7 @@ app.use((req, res, next) => {
     serveStatic(app);
   }
 
-  // Use port 5000 for Replit environment compatibility
+  // Use port 5000 for development
   const port = process.env.PORT ? parseInt(process.env.PORT) : 5000;
   const host = process.env.HOST || '0.0.0.0'; // Bind to all interfaces for external access
   

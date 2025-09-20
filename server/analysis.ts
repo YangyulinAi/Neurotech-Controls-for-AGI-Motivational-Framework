@@ -22,7 +22,7 @@ export function startAnalysis(config: AnalysisConfig, res: any) {
   isAnalysisRunning = true;
 
   // Build arguments
-  const args = ["tests/analyze_file_onnx.py", config.filename];
+  const args = ["scripts/tests/analyze_file_onnx.py", config.filename];
   if (config.computePhi) {
     args.push("--compute_phi", "--phi_method", config.phiMethod);
   }
@@ -102,7 +102,7 @@ export function stopAnalysis(res: any) {
   } catch (error) {
     return res.status(500).json({
       error: "Failed to stop analysis",
-      details: error.message
+      details: error instanceof Error ? error.message : String(error)
     });
   }
 }

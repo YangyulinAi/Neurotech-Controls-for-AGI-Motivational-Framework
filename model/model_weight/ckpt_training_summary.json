@@ -1,0 +1,12 @@
+{
+  "training_completed": true,
+  "total_epochs": 11,
+  "final_loss": 0.24294067777338482,
+  "best_loss": 0.24294067777338482,
+  "total_training_time": 66.24428272247314,
+  "average_epoch_time": 6.022207520224831,
+  "initial_lr": 0.0001,
+  "final_lr": 0.0001,
+  "loss_reduction": 0.09391102549575622,
+  "loss_reduction_percentage": 27.879041306412
+}

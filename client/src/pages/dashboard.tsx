@@ -24,14 +24,68 @@ export default function Dashboard() {
 
   const { toast } = useToast();
   
-  // Detect analysis mode from URL params
+  // Detect analysis mode from URL params and start real-time analysis
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const mode = urlParams.get('mode');
     if (mode === 'offline' || mode === 'realtime') {
       setAnalysisMode(mode);
+      
+      // Auto-start real-time analysis for live EEG device connection
+      if (mode === 'realtime') {
+        console.log('Starting real-time EEG device analysis...');
+        setLslStatus('connecting');
+        
+        const startRealTimeAnalysis = async () => {
+          try {
+            const response = await fetch('/api/start-analysis', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                mode: 'live',
+                computePhi: true,
+                phiMethod: 'mock'
+              }),
+            });
+
+            const data = await response.json();
+            
+            if (response.ok) {
+              console.log('Real-time analysis started:', data);
+              setLslStatus('connected');
+              toast({
+                title: 'Real-time Analysis Started',
+                description: 'Connecting to EEG devices via LSL...',
+                duration: 3000,
+              });
+            } else {
+              console.error('Failed to start real-time analysis:', data);
+              setLslStatus('error');
+              toast({
+                title: 'Connection Failed',
+                description: data.error || 'Failed to connect to EEG devices',
+                variant: 'destructive',
+                duration: 5000,
+              });
+            }
+          } catch (error) {
+            console.error('Error starting real-time analysis:', error);
+            setLslStatus('error');
+            toast({
+              title: 'Connection Error',
+              description: 'Unable to start real-time EEG analysis',
+              variant: 'destructive',
+              duration: 5000,
+            });
+          }
+        };
+
+        startRealTimeAnalysis();
+      }
     }
-  }, []);
+  }, [toast]);
   
   const {
     connectionStatus,
@@ -55,7 +109,7 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, [sessionStartTime]);
 
-  // Monitor for offline analysis completion
+  // Monitor for offline analysis completion and real-time data flow
   useEffect(() => {
     if (analysisMode === 'offline') {
       const checkAnalysisComplete = () => {
@@ -72,8 +126,29 @@ export default function Dashboard() {
       
       const timer = setTimeout(checkAnalysisComplete, 2000);
       return () => clearTimeout(timer);
+    } else if (analysisMode === 'realtime') {
+      // Monitor real-time data flow status
+      if (dataFlowStatus?.isReceivingData && totalDataPoints > 0) {
+        // We have real data flowing from EEG devices
+        setLslStatus('streaming');
+      } else if (lslStatus === 'connected') {
+        // Connected but no data yet - this is normal, waiting for EEG device
+        const noDataTimer = setTimeout(() => {
+          if (!dataFlowStatus?.isReceivingData) {
+            setLslStatus('error');
+            toast({
+              title: 'No EEG Device Detected',
+              description: 'Please connect an EEG device (Muse2, X.on, OpenBCI) and start streaming.',
+              variant: 'destructive',
+              duration: 8000,
+            });
+          }
+        }, 10000); // Wait 10 seconds for device connection
+        
+        return () => clearTimeout(noDataTimer);
+      }
     }
-  }, [analysisMode, dataHistory.length, totalDataPoints, toast]);
+  }, [analysisMode, dataHistory.length, totalDataPoints, dataFlowStatus?.isReceivingData, lslStatus, toast]);
 
   const handleExport = useCallback(() => {
     if (dataHistory.length === 0) {
@@ -165,7 +240,7 @@ export default function Dashboard() {
             />
 
             <MetricCard
-              title="Consciousness Φ"
+              title="IIT Φ"
               value={currentData?.phi !== undefined ? currentData.phi.toFixed(4) : 'Computing'}
               icon={<Brain size={20} />}
               color="text-purple-400"

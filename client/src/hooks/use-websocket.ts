@@ -135,8 +135,8 @@ export function useWebSocket() {
             console.log('Raw arousal:', message.arousal, 'type:', typeof message.arousal);
             console.log('Raw phi:', message.phi, 'type:', typeof message.phi);
             
-            const valence = Math.max(-1, Math.min(1, message.valence));
-            const arousal = Math.max(-1, Math.min(1, message.arousal));
+            const valence = typeof message.valence === 'number' ? Math.max(-1, Math.min(1, message.valence)) : 0;
+            const arousal = typeof message.arousal === 'number' ? Math.max(-1, Math.min(1, message.arousal)) : 0;
             const phi = typeof message.phi === 'number' ? Math.max(0, message.phi) : undefined;
 
             console.log('Processed BCI data point:', { valence, arousal, phi });
