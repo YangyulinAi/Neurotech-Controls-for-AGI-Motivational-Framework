@@ -12,7 +12,7 @@ Welcome to the Neural Axis BCI documentation center. This hub provides organized
 
 ### 🔧 **Hardware & Setup**
 - **[🧠 Hardware Guide](HARDWARE_GUIDE.md)** - Complete EEG device setup
-- **[📡 X.on Setup Guide](X_on_Setup_Guide.md)** - X.on device specific configuration
+- **[📡 X.on Setup Guide](X_ON_SETUP_GUIDE.md)** - X.on device specific configuration
 - **[⚡ Quick Start Tutorial](quick_start.ipynb)** - Interactive system walkthrough
 
 ### 🧬 **Advanced Features**
@@ -38,7 +38,7 @@ Welcome to the Neural Axis BCI documentation center. This hub provides organized
 ### **Specialized Guides**
 | Document | Description | Audience |
 |----------|-------------|----------|
-| [X.on Setup Guide](X_on_Setup_Guide.md) | X.on device configuration | X.on users |
+| [X.on Setup Guide](X_ON_SETUP_GUIDE.md) | X.on device configuration | X.on users |
 
 ---
 
@@ -51,7 +51,7 @@ Welcome to the Neural Axis BCI documentation center. This hub provides organized
 
 ### **I Want to Set Up Hardware**
 1. [Hardware Guide](HARDWARE_GUIDE.md) - General device setup
-2. [X.on Setup Guide](X_on_Setup_Guide.md) - If using X.on device
+2. [X.on Setup Guide](X_ON_SETUP_GUIDE.md) - If using X.on device
 
 ### **I'm a Developer/Researcher**
 1. [Technical Documentation](DOCUMENTATION.md) - Technical details
@@ -74,7 +74,7 @@ Welcome to the Neural Axis BCI documentation center. This hub provides organized
 ### **Hardware Integration**
 - [Device Configuration](HARDWARE_GUIDE.md#device-configuration) → Hardware Guide
 - [Channel Mapping](HARDWARE_GUIDE.md#channel-mapping) → Hardware Guide
-- [X.on Specific Setup](X_on_Setup_Guide.md#x-on-setup) → X.on Setup Guide
+- [X.on Specific Setup](X_ON_SETUP_GUIDE.md#x-on-setup) → X.on Setup Guide
 
 ### **Advanced Features**
 - [IIT Φ Calculation](README_IIT_PHI.md#phi-calculation) → IIT Φ Integration
@@ -88,7 +88,7 @@ Welcome to the Neural Axis BCI documentation center. This hub provides organized
 |----------|--------|--------------|---------|
 | [README.md](README.md) | ✅ Complete | 2025-01 | 2.0 |
 | [Hardware Guide](HARDWARE_GUIDE.md) | ✅ Complete | 2025-01 | 2.0 |
-| [X.on Setup Guide](X_on_Setup_Guide.md) | ✅ Complete | 2025-01 | 2.0 |
+| [X.on Setup Guide](X_ON_SETUP_GUIDE.md) | ✅ Complete | 2025-01 | 2.0 |
 | [IIT Φ Integration](README_IIT_PHI.md) | ✅ Complete | 2025-01 | 2.0 |
 | [Technical Documentation](DOCUMENTATION.md) | ✅ Complete | 2025-01 | 2.0 |
 | [Quick Start Tutorial](quick_start.ipynb) | ✅ Complete | 2025-01 | 2.0 |
@@ -100,7 +100,7 @@ Welcome to the Neural Axis BCI documentation center. This hub provides organized
 ### **Common Issues**
 - **Installation Problems** → [README.md#installation](README.md#installation)
 - **Hardware Connection** → [Hardware Guide](HARDWARE_GUIDE.md)
-- **X.on Setup** → [X.on Setup Guide](X_on_Setup_Guide.md)
+- **X.on Setup** → [X.on Setup Guide](X_ON_SETUP_GUIDE.md)
 - **Technical Questions** → [Technical Documentation](DOCUMENTATION.md)
 
 ### **Feature Questions**

@@ -21,18 +21,18 @@ npm run dev
 
 ## 📚 Documentation
 
-> **📖 [Complete Documentation Hub](notebooks/Index.md)**
+> **📖 [Complete Documentation Hub](notebooks/INDEX.md)**
 
-Our comprehensive documentation is organized in the `notebooks/` directory. The [Index.md](notebooks/Index.md) serves as the central hub for all guides, tutorials, and technical references.
+Our comprehensive documentation is organized in the `notebooks/` directory. The [INDEX.md](notebooks/INDEX.md) serves as the central hub for all guides, tutorials, and technical references.
 
 ### Key Documentation Links
 
-- **[📋 Main Documentation](notebooks/Readme.md)** - Project overview and installation
-- **[🔧 Hardware Setup](notebooks/Hardware_guide.md)** - EEG device configuration
-- **[⚡ Quick Start Tutorial](notebooks/quick_start.ipynb)** - Interactive walkthrough
-- **[📡 X.on Setup Guide](notebooks/X_on_setup_guide.md)** - X.on device specific setup
-- **[🌀 IIT Φ Integration](notebooks/Readme_iit_phi.md)** - Consciousness measurement
-- **[📑 Technical Reference](notebooks/Documentation.md)** - Detailed technical docs
+- **[📋 Main Documentation](README.md)** - Project overview and installation
+- **[🔧 Hardware Setup](notebooks/HARDWARE_GUIDE.md)** - EEG device configuration
+- **[⚡ Quick Start Tutorial](notebooks/QUICK_START.ipynb)** - Interactive walkthrough
+- **[📡 X.on Setup Guide](notebooks/X_ON_SETUP_GUIDE.md)** - X.on device specific setup
+- **[🌀 IIT Φ Integration](notebooks/README_IIT_PHI.md)** - Consciousness measurement
+- **[📑 Technical Reference](notebooks/DOCUMENTATION.md)** - Detailed technical docs
 
 ## 🏗️ System Architecture
 
@@ -130,13 +130,52 @@ python scripts/train/train_labeled.py    # Train models
 python scripts/tools/export_onnx.py      # Export ONNX models
 ```
 
+## 📁 Project Structure
+
+```
+├── client/          # React frontend
+├── server/          # Express backend
+├── scripts/         # Python analysis engine
+│   ├── train/       # Model training
+│   ├── tools/       # ONNX export and benchmarking
+│   └── tests/       # Test suites
+├── configs/         # Device and feature configurations
+├── notebooks/       # Interactive tutorials
+└── model/           # Trained ONNX models
+```
+
+## 🔗 API Endpoints
+
+### REST API
+- `GET /api/data-files` - List EEG data files
+- `POST /api/upload` - Upload recordings
+- `POST /api/analyze` - Analyze EEG file
+
+### WebSocket Events
+- `emotion_prediction` - Real-time valence/arousal
+- `phi_measurement` - IIT Φ values
+- `system_status` - System health metrics
+
+## 🧪 Testing
+
+```bash
+# Python tests
+python -m pytest scripts/tests/
+
+# Frontend tests
+npm test
+
+# Hardware testing
+python -c "from scripts.device_adapter import DeviceAdapter; print('Device adapter ready')"
+```
+
 ## 📖 Learn More
 
-For detailed information, tutorials, and technical documentation, visit our **[Documentation Hub](notebooks/Index.md)**.
+For detailed information, tutorials, and technical documentation, visit our **[Documentation Hub](notebooks/INDEX.md)**.
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guidelines](notebooks/Index.md#contributing-to-documentation) for details.
+We welcome contributions! Please see our [Contributing Guidelines](notebooks/INDEX.md#contributing-to-documentation) for details.
 
 ## 📄 License
 
@@ -152,4 +191,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**📖 [View Complete Documentation →](notebooks/Index.md)**
+**📖 [View Complete Documentation →](notebooks/INDEX.md)**
