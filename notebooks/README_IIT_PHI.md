@@ -263,30 +263,6 @@ phi_estimator = PhiEstimator(method='mock')
 - **Temporal IIT**: Consciousness dynamics over time
 - **Clinical Validation**: Medical-grade consciousness assessment
 
-### Research Extensions
-- **Multi-modal Integration**: Combine EEG Φ with other consciousness indicators
-- **Machine Learning**: Predict consciousness states from EEG features
-- **Network Analysis**: Graph-theoretic consciousness measures
-- **Real-time Feedback**: Consciousness-based neurofeedback systems
-
-## References
-
-1. Tononi, G. (2008). Integrated Information Theory of Consciousness
-2. Oizumi, M., et al. (2014). From the Phenomenology to the Mechanisms of Consciousness: IIT 3.0
-3. Doerig, A., et al. (2021). The unfolding argument: Why IIT and other causal structure theories cannot explain consciousness
-4. Mayner, W.G.P., et al. (2018). PyPhi: A toolbox for integrated information theory
-
-## Support
-
-### Documentation
-- **PyPhi Documentation**: https://pyphi.readthedocs.io/
-- **IIT Theory**: http://integratedinformationtheory.org/
-- **Neural Axis BCI Guide**: [DOCUMENTATION.md](DOCUMENTATION.md)
-
-### Community
-- **IIT Research Community**: Academic collaborations and discussions
-- **BCI Developers**: Technical implementation support
-- **Consciousness Research**: Interdisciplinary research opportunities
 
 ---
 
